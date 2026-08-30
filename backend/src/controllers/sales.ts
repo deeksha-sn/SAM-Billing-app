@@ -441,9 +441,13 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
     const {
+      partyId,
+      invoiceDate,
+      items,
+      paymentMode,
+      amountPaid,
       status,
       notes,
-      amountPaid,
       ewayBillNo,
       placeOfSupply,
       poNumber,
@@ -452,7 +456,7 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
       termsSnapshot,
     } = req.body;
 
-    const invoice = await prisma.invoice.findUnique({ where: { id }, include: { party: true } });
+    const invoice = await prisma.invoice.findUnique({ where: { id }, include: { party: true, items: true } });
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
     const formattedTermsSnapshot = termsSnapshot !== undefined
@@ -465,19 +469,99 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
 
     const result = await prisma.$transaction(async (tx) => {
       let newStatus = status || invoice.status;
+      const targetPartyId = partyId || invoice.partyId;
+      const targetParty = await tx.party.findUnique({ where: { id: targetPartyId } });
+      if (!targetParty) throw new Error('Customer not found');
 
-      // Handle cancellation logic safely
-      if (newStatus === 'CANCELLED' && invoice.status !== 'CANCELLED') {
-        // Reverse stock
+      const company = await tx.companyProfile.findUnique({ where: { id: 'default' } });
+      const companyStateCode = company?.stateCode || '29';
+      const isInterState = isInterStateTransaction(companyStateCode, targetParty.stateCode);
+
+      let totalTaxable = invoice.taxableAmount;
+      let totalCgst = invoice.cgstAmount;
+      let totalSgst = invoice.sgstAmount;
+      let totalIgst = invoice.igstAmount;
+      let grandTotal = invoice.grandTotal;
+      let roundOff = invoice.roundOff;
+      let balanceDue = invoice.balanceDue;
+
+      let processedItems: any[] | null = null;
+
+      if (items && Array.isArray(items) && items.length > 0) {
+        let rawTotalTaxable = 0;
+        let rawTotalCgst = 0;
+        let rawTotalSgst = 0;
+        let rawTotalIgst = 0;
+        let rawGrandTotal = 0;
+
+        processedItems = items.map((line: any) => {
+          const qty = Number(line.quantity) || 1;
+          const rate = Number(line.rate) || 0;
+          const discountPercent = Number(line.discountPercent) || 0;
+          const gstRate = Number(line.gstRate) || 18;
+
+          const calc = calculateGST(qty, rate, discountPercent, gstRate, isInterState);
+
+          rawTotalTaxable += calc.taxableValue;
+          rawTotalCgst += calc.cgstAmount;
+          rawTotalSgst += calc.sgstAmount;
+          rawTotalIgst += calc.igstAmount;
+          rawGrandTotal += calc.totalAmount;
+
+          return {
+            itemId: line.itemId,
+            itemName: line.itemName || 'Item',
+            hsnSac: line.hsnSac || '8436',
+            unit: line.unit || 'Nos',
+            quantity: qty,
+            rate: rate,
+            discountPercent: discountPercent,
+            discountAmount: Number(((qty * rate * discountPercent) / 100).toFixed(2)),
+            taxableValue: calc.taxableValue,
+            gstRate: gstRate,
+            cgstAmount: calc.cgstAmount,
+            sgstAmount: calc.sgstAmount,
+            igstAmount: calc.igstAmount,
+            totalAmount: calc.totalAmount,
+            serialNumber: line.serialNumber,
+          };
+        });
+
+        grandTotal = Math.round(rawGrandTotal);
+        roundOff = Number((grandTotal - rawGrandTotal).toFixed(2));
+        totalTaxable = Number(rawTotalTaxable.toFixed(2));
+        totalCgst = Number(rawTotalCgst.toFixed(2));
+        totalSgst = Number(rawTotalSgst.toFixed(2));
+        totalIgst = Number(rawTotalIgst.toFixed(2));
+        const paidVal = amountPaid !== undefined ? Number(amountPaid) : invoice.amountPaid;
+        balanceDue = grandTotal - paidVal;
+      }
+
+      // Handle stock reversal/re-application if stock was deducted previously
+      if (invoice.status !== 'DRAFT' && invoice.status !== 'CANCELLED') {
         await reverseInvoiceStockDeduction(tx, invoice.id, invoice.invoiceNumber, invoice.partyId, req.user?.id);
-      } else if (invoice.status === 'CANCELLED' && newStatus !== 'CANCELLED') {
-        // Re-apply stock
-        await applyInvoiceStockDeduction(tx, invoice.id, invoice.invoiceNumber, invoice.partyId, req.user?.id);
+      }
+
+      if (processedItems) {
+        await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
       }
 
       const updated = await tx.invoice.update({
         where: { id },
         data: {
+          partyId: targetPartyId,
+          invoiceDate: invoiceDate ? new Date(invoiceDate) : invoice.invoiceDate,
+          customerStateCode: targetParty.stateCode,
+          isInterState: isInterState,
+          taxableAmount: totalTaxable,
+          cgstAmount: totalCgst,
+          sgstAmount: totalSgst,
+          igstAmount: totalIgst,
+          roundOff: roundOff,
+          grandTotal: grandTotal,
+          amountPaid: amountPaid !== undefined ? Number(amountPaid) : invoice.amountPaid,
+          balanceDue: balanceDue,
+          paymentMode: paymentMode || invoice.paymentMode,
           status: newStatus,
           notes: notes !== undefined ? notes : invoice.notes,
           ewayBillNo: ewayBillNo !== undefined ? (ewayBillNo ? String(ewayBillNo).trim() : null) : invoice.ewayBillNo,
@@ -486,8 +570,19 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
           poDate: poDate !== undefined ? (poDate ? new Date(poDate) : null) : invoice.poDate,
           termsTemplateId: termsTemplateId !== undefined ? (termsTemplateId ? String(termsTemplateId) : null) : invoice.termsTemplateId,
           termsSnapshot: formattedTermsSnapshot,
+          items: processedItems
+            ? {
+                create: processedItems.map(({ serialNumber, ...rest }) => rest),
+              }
+            : undefined,
         },
+        include: { party: true, items: { include: { item: true } } },
       });
+
+      // Re-apply stock deduction if new status is confirmed
+      if (newStatus !== 'DRAFT' && newStatus !== 'CANCELLED') {
+        await applyInvoiceStockDeduction(tx, updated.id, updated.invoiceNumber, updated.partyId, req.user?.id);
+      }
 
       await tx.auditLog.create({
         data: {
@@ -496,8 +591,8 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
           entityType: 'INVOICE',
           entityId: id,
           reference: invoice.invoiceNumber,
-          oldValues: JSON.stringify({ status: invoice.status }),
-          newValues: JSON.stringify({ status: newStatus }),
+          oldValues: JSON.stringify({ grandTotal: invoice.grandTotal, status: invoice.status }),
+          newValues: JSON.stringify({ grandTotal: updated.grandTotal, status: updated.status }),
         },
       });
 
@@ -506,6 +601,7 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
 
     return res.json({ invoice: result });
   } catch (err: any) {
+    console.error('Update Invoice Error:', err);
     return res.status(500).json({ error: err.message });
   }
 }
