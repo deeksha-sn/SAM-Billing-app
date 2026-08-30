@@ -54,12 +54,24 @@ model SystemSettings {
   updatedAt   DateTime @updatedAt
 }
 
+model DocumentNumberConfig {
+  id            String   @id @default(uuid())
+  documentType  String   @unique // INVOICE, PURCHASE, QUOTATION, DELIVERY_CHALLAN, SERVICE
+  prefix        String   @default("SAM")
+  pattern       String   @default("SAM-{FY}-{NUMBER}")
+  paddingDigits Int      @default(4)
+  nextNumber    Int      @default(1)
+  updatedAt     DateTime @updatedAt
+}
+
 model SequenceNumber {
-  id           String   @id @default(uuid())
-  documentType String   // INVOICE, PURCHASE, QUOTATION, DELIVERY_CHALLAN, RECEIPT, SERVICE, CREDIT_NOTE, DEBIT_NOTE
-  prefix       String   // e.g. INV, PUR, QUO, DC, REC, SRV, CN, DN
-  financialYear String  // e.g. 2026-27
-  nextNumber   Int      @default(1)
+  id            String   @id @default(uuid())
+  documentType  String   // INVOICE, PURCHASE, QUOTATION, DELIVERY_CHALLAN, RECEIPT, SERVICE, CREDIT_NOTE, DEBIT_NOTE
+  prefix        String   @default("SAM")
+  pattern       String   @default("SAM-{FY}-{NUMBER}")
+  paddingDigits Int      @default(4)
+  financialYear String   // e.g. 2026-27
+  nextNumber    Int      @default(1)
 
   @@unique([documentType, financialYear])
 }

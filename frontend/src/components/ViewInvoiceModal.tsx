@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Edit, Printer, Share2, Download, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Edit, Printer, Share2, Download, FileText, Trash2, CheckCircle2, AlertCircle } from 'lucide-react';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
@@ -10,6 +10,7 @@ interface ViewInvoiceModalProps {
   onEdit: () => void;
   onPrint: () => void;
   onShare: () => void;
+  onDelete?: () => void;
 }
 
 function numberToWords(num: number): string {
@@ -40,6 +41,7 @@ export const ViewInvoiceModal: React.FC<ViewInvoiceModalProps> = ({
   onEdit,
   onPrint,
   onShare,
+  onDelete,
 }) => {
   if (!invoice) return null;
 
@@ -115,6 +117,16 @@ export const ViewInvoiceModal: React.FC<ViewInvoiceModalProps> = ({
               <Download className="w-3.5 h-3.5" />
               <span>Download PDF</span>
             </button>
+            {onDelete && (
+              <button
+                onClick={onDelete}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 transition shadow"
+                title="Delete Bill Permanently"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Bill</span>
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 ml-1"

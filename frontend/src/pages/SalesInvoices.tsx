@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../api';
-import { FileText, Plus, Printer, Eye, Edit, Share2, Ban, Search, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { FileText, Plus, Printer, Eye, Edit, Share2, Ban, Search, CheckCircle2, AlertCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { PrintInvoiceModal } from '../components/PrintInvoiceModal';
 import { ViewInvoiceModal } from '../components/ViewInvoiceModal';
 import { ShareInvoiceModal } from '../components/ShareInvoiceModal';
 import { InvoiceEditorModal } from '../components/InvoiceEditorModal';
 
 export const SalesInvoices: React.FC = () => {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [company, setCompany] = useState<any>(null);
@@ -74,6 +76,25 @@ export const SalesInvoices: React.FC = () => {
       loadInvoices();
     } catch (err: any) {
       alert(`Error cancelling invoice: ${err.message}`);
+    }
+  };
+
+  const handleDeleteInvoice = async (invoice: any) => {
+    if (invoice.status !== 'DRAFT' && user?.role !== 'ADMIN') {
+      alert('Only ADMIN users can permanently delete confirmed invoices');
+      return;
+    }
+
+    const confirmMsg = `Are you sure you want to PERMANENTLY DELETE Invoice ${invoice.invoiceNumber}?\n\nWARNING: This will permanently remove this invoice record from the database and automatically reverse associated BOM/inventory stock, GST reports, customer ledgers, and payment allocations.`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await apiRequest(`/sales/invoices/${invoice.id}`, { method: 'DELETE' });
+      alert(`Invoice ${invoice.invoiceNumber} deleted permanently!`);
+      loadInvoices();
+    } catch (err: any) {
+      alert(`Error deleting invoice: ${err.message}`);
     }
   };
 
@@ -247,10 +268,21 @@ export const SalesInvoices: React.FC = () => {
                           {!isCancelled && (
                             <button
                               onClick={() => handleCancelInvoice(inv)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition"
                               title="Cancel Invoice"
                             >
                               <Ban className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* Delete Bill */}
+                          {(isDraft || user?.role === 'ADMIN') && (
+                            <button
+                              onClick={() => handleDeleteInvoice(inv)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                              title="Delete Bill Permanently"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           )}
                         </div>
@@ -302,6 +334,11 @@ export const SalesInvoices: React.FC = () => {
             const target = viewingInvoice;
             setViewingInvoice(null);
             setSharingInvoice(target);
+          }}
+          onDelete={() => {
+            const target = viewingInvoice;
+            setViewingInvoice(null);
+            handleDeleteInvoice(target);
           }}
         />
       )}

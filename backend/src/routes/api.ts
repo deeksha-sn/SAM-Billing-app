@@ -2,12 +2,12 @@ import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth';
 
 import { login, getCurrentUser, getUsers, createUser, updateUser } from '../controllers/auth';
-import { getCompanyProfile, updateCompanyProfile, getSystemSettings, updateSystemSetting } from '../controllers/settings';
+import { getCompanyProfile, updateCompanyProfile, getSystemSettings, updateSystemSetting, getDocumentNumberConfigs, updateDocumentNumberConfig } from '../controllers/settings';
 import { getTermsTemplates, getTermsTemplateById, createTermsTemplate, updateTermsTemplate, deleteTermsTemplate, duplicateTermsTemplate, setDefaultTermsTemplate } from '../controllers/terms';
 import { getParties, getPartyById, createParty, updateParty, deleteParty } from '../controllers/parties';
 import { getItems, getItemById, createItem, updateItem, adjustStock, getCategories, createCategory, getUnits, createUnit } from '../controllers/items';
 import { getBOMs, getBOMByFinishedItem, saveBOM } from '../controllers/bom';
-import { getInvoices, getInvoiceById, createInvoice, updateInvoice, cancelInvoice } from '../controllers/sales';
+import { getInvoices, getInvoiceById, createInvoice, updateInvoice, cancelInvoice, deleteInvoice } from '../controllers/sales';
 import { getDeliveryChallans, createDeliveryChallan } from '../controllers/deliveryChallans';
 import { getPurchases, createPurchase } from '../controllers/purchases';
 import { getPayments, createPayment } from '../controllers/payments';
@@ -37,6 +37,8 @@ router.get('/settings/company', getCompanyProfile);
 router.put('/settings/company', authorize(['ADMIN']), updateCompanyProfile);
 router.get('/settings/system', getSystemSettings);
 router.put('/settings/system', authorize(['ADMIN']), updateSystemSetting);
+router.get('/settings/numbering', getDocumentNumberConfigs);
+router.put('/settings/numbering/:documentType', authorize(['ADMIN']), updateDocumentNumberConfig);
 
 // Terms & Conditions Master Templates
 router.get('/terms/templates', getTermsTemplates);
@@ -76,6 +78,7 @@ router.get('/sales/invoices/:id', getInvoiceById);
 router.post('/sales/invoices', createInvoice);
 router.put('/sales/invoices/:id', updateInvoice);
 router.post('/sales/invoices/:id/cancel', cancelInvoice);
+router.delete('/sales/invoices/:id', deleteInvoice);
 
 // Delivery Challans
 router.get('/delivery-challans', getDeliveryChallans);

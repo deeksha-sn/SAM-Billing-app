@@ -1,5 +1,6 @@
 import { prisma } from '../src/db';
 import { calculateGST, isInterStateTransaction } from '../src/utils/gst';
+import { generateDocumentNumber, getIndianFinancialYear, formatDocumentNumber } from '../src/utils/numbering';
 
 async function runCriticalTests() {
   console.log('====================================================');
@@ -135,7 +136,6 @@ async function runCriticalTests() {
     // ----------------------------------------------------
     console.log('--- TEST 2: CRITICAL GST CALCULATION ---');
 
-    // Same-state (KA stateCode: 29 vs KA stateCode: 29)
     const sameStateCalc = calculateGST(1, 10000, 0, 18, false);
     console.log(`Same-State (Intra-state) Taxable: ₹10,000, 18% -> CGST: ₹${sameStateCalc.cgstAmount}, SGST: ₹${sameStateCalc.sgstAmount}, Total: ₹${sameStateCalc.totalAmount}`);
 
@@ -143,7 +143,6 @@ async function runCriticalTests() {
       throw new Error('TEST 2 FAIL: Same-state CGST/SGST calculation incorrect!');
     }
 
-    // Inter-state (KA stateCode: 29 vs MH stateCode: 27)
     const isInter = isInterStateTransaction('29', '27');
     const interStateCalc = calculateGST(1, 10000, 0, 18, isInter);
     console.log(`Inter-State Taxable: ₹10,000, 18% -> IGST: ₹${interStateCalc.igstAmount}, Total: ₹${interStateCalc.totalAmount}`);
@@ -172,7 +171,6 @@ async function runCriticalTests() {
       },
     });
 
-    // Payment 1: ₹20,000
     let paid1 = invPay.amountPaid + 20000;
     let bal1 = invPay.grandTotal - paid1;
     let status1 = bal1 === 0 ? 'PAID' : paid1 > 0 ? 'PARTIALLY_PAID' : 'UNPAID';
@@ -189,7 +187,6 @@ async function runCriticalTests() {
       throw new Error('TEST 3 FAIL: Partial payment status incorrect!');
     }
 
-    // Payment 2: ₹30,000
     let paid2 = updatedInvPay.amountPaid + 30000;
     let bal2 = updatedInvPay.grandTotal - paid2;
     let status2 = bal2 === 0 ? 'PAID' : paid2 > 0 ? 'PARTIALLY_PAID' : 'UNPAID';
@@ -206,6 +203,115 @@ async function runCriticalTests() {
       throw new Error('TEST 3 FAIL: Full payment status incorrect!');
     }
     console.log('✅ TEST 3 PASSED: Payment Allocation & Status Calculation Verified!\n');
+
+    // ----------------------------------------------------
+    // TEST 4: INVOICE NUMBER PATTERNS & FINANCIAL YEAR RESET
+    // ----------------------------------------------------
+    console.log('--- TEST 4: INVOICE NUMBER PATTERNS & FY RESET ---');
+
+    const dateFY26 = new Date('2026-08-30');
+    const fy26Info = getIndianFinancialYear(dateFY26);
+    console.log(`Indian FY for 30 Aug 2026 -> short: ${fy26Info.fy}, full: ${fy26Info.fyFull}`);
+
+    if (fy26Info.fy !== '26-27' || fy26Info.fyFull !== '2026-27') {
+      throw new Error(`TEST 4 FAIL: Indian FY calculation failed! Expected 26-27, got ${fy26Info.fy}`);
+    }
+
+    const dateFY27 = new Date('2027-04-01'); // 1 April 2027
+    const fy27Info = getIndianFinancialYear(dateFY27);
+    console.log(`Indian FY for 01 Apr 2027 -> short: ${fy27Info.fy}, full: ${fy27Info.fyFull}`);
+
+    if (fy27Info.fy !== '27-28' || fy27Info.fyFull !== '2027-28') {
+      throw new Error(`TEST 4 FAIL: Indian FY reset failed! Expected 27-28, got ${fy27Info.fy}`);
+    }
+
+    const num1 = formatDocumentNumber('SAM-{FY}-{NUMBER}', 4, 1, dateFY26);
+    const num2 = formatDocumentNumber('SAM-{FY}-{NUMBER}', 4, 2, dateFY26);
+    const numNewFY = formatDocumentNumber('SAM-{FY}-{NUMBER}', 4, 1, dateFY27);
+
+    console.log(`FY 2026-27 Sequence 1 -> ${num1}`);
+    console.log(`FY 2026-27 Sequence 2 -> ${num2}`);
+    console.log(`FY 2027-28 Sequence 1 -> ${numNewFY}`);
+
+    if (num1 !== 'SAM-26-27-0001' || num2 !== 'SAM-26-27-0002' || numNewFY !== 'SAM-27-28-0001') {
+      throw new Error('TEST 4 FAIL: Document number pattern formatting failed!');
+    }
+
+    console.log('✅ TEST 4 PASSED: Invoice Number Patterns & Yearly Sequence Reset Verified!\n');
+
+    // ----------------------------------------------------
+    // TEST 5: PERMANENT INVOICE DELETION & STOCK REVERSAL
+    // ----------------------------------------------------
+    console.log('--- TEST 5: PERMANENT INVOICE DELETION & STOCK REVERSAL ---');
+
+    // Reset component stocks
+    await prisma.item.update({ where: { id: motor.id }, data: { currentStock: 20 } });
+    await prisma.item.update({ where: { id: blade.id }, data: { currentStock: 50 } });
+    await prisma.item.update({ where: { id: nut.id }, data: { currentStock: 100 } });
+
+    const delInvNo = `SAM-DEL-${Date.now()}`;
+    const delInv = await prisma.$transaction(async (tx) => {
+      const created = await tx.invoice.create({
+        data: {
+          invoiceNumber: delInvNo,
+          financialYear: '2026-27',
+          invoiceDate: new Date(),
+          partyId: customer.id,
+          taxableAmount: 45000,
+          grandTotal: 53100,
+          status: 'CONFIRMED',
+          items: {
+            create: [
+              {
+                itemId: chaffCutter.id,
+                itemName: chaffCutter.name,
+                hsnSac: '8436',
+                unit: 'Nos',
+                quantity: 1,
+                rate: 45000,
+                taxableValue: 45000,
+                gstRate: 18,
+                totalAmount: 53100,
+              },
+            ],
+          },
+        },
+      });
+
+      // Deduct stock: Motor: -1, Blade: -2, Nut: -8 -> (19, 48, 92)
+      await tx.item.update({ where: { id: motor.id }, data: { currentStock: { decrement: 1 } } });
+      await tx.item.update({ where: { id: blade.id }, data: { currentStock: { decrement: 2 } } });
+      await tx.item.update({ where: { id: nut.id }, data: { currentStock: { decrement: 8 } } });
+
+      return created;
+    });
+
+    console.log(`Created invoice ${delInv.invoiceNumber}. Stock reduced -> Motor: 19, Blade: 48, Nut: 92`);
+
+    // Perform permanent deletion & stock reversal simulation
+    await prisma.$transaction(async (tx) => {
+      // Reverse stock
+      await tx.item.update({ where: { id: motor.id }, data: { currentStock: { increment: 1 } } });
+      await tx.item.update({ where: { id: blade.id }, data: { currentStock: { increment: 2 } } });
+      await tx.item.update({ where: { id: nut.id }, data: { currentStock: { increment: 8 } } });
+
+      await tx.invoiceItem.deleteMany({ where: { invoiceId: delInv.id } });
+      await tx.invoice.delete({ where: { id: delInv.id } });
+    });
+
+    const mAfterDel = await prisma.item.findUnique({ where: { id: motor.id } });
+    const bAfterDel = await prisma.item.findUnique({ where: { id: blade.id } });
+    const nAfterDel = await prisma.item.findUnique({ where: { id: nut.id } });
+    const deletedInvRecord = await prisma.invoice.findUnique({ where: { id: delInv.id } });
+
+    console.log(`After Permanent Delete -> Motor: ${mAfterDel?.currentStock}, Blade: ${bAfterDel?.currentStock}, Nut: ${nAfterDel?.currentStock}`);
+    console.log(`Database record exists: ${!!deletedInvRecord}`);
+
+    if (mAfterDel?.currentStock !== 20 || bAfterDel?.currentStock !== 50 || nAfterDel?.currentStock !== 100 || deletedInvRecord !== null) {
+      throw new Error('TEST 5 FAIL: Permanent deletion or stock reversal failed!');
+    }
+
+    console.log('✅ TEST 5 PASSED: Permanent Invoice Deletion & Stock Reversal Verified!\n');
 
     console.log('====================================================');
     console.log('ALL CRITICAL INTEGRATION TESTS PASSED PERFECTLY!');

@@ -443,6 +443,7 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
     const {
       partyId,
       invoiceDate,
+      invoiceNumber,
       items,
       paymentMode,
       amountPaid,
@@ -468,6 +469,21 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
       : invoice.termsSnapshot;
 
     const result = await prisma.$transaction(async (tx) => {
+      let finalInvoiceNo = invoice.invoiceNumber;
+      if (invoiceNumber && invoiceNumber.trim() !== invoice.invoiceNumber) {
+        if (req.user?.role !== 'ADMIN') {
+          throw new Error('Only ADMIN users can edit invoice numbers');
+        }
+        const candidateNo = invoiceNumber.trim();
+        const existingWithNo = await tx.invoice.findFirst({
+          where: { invoiceNumber: candidateNo, NOT: { id: invoice.id } },
+        });
+        if (existingWithNo) {
+          throw new Error(`Invoice number "${candidateNo}" already exists.`);
+        }
+        finalInvoiceNo = candidateNo;
+      }
+
       let newStatus = status || invoice.status;
       const targetPartyId = partyId || invoice.partyId;
       const targetParty = await tx.party.findUnique({ where: { id: targetPartyId } });
@@ -549,6 +565,7 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
       const updated = await tx.invoice.update({
         where: { id },
         data: {
+          invoiceNumber: finalInvoiceNo,
           partyId: targetPartyId,
           invoiceDate: invoiceDate ? new Date(invoiceDate) : invoice.invoiceDate,
           customerStateCode: targetParty.stateCode,
@@ -590,9 +607,9 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
           action: 'INVOICE_EDIT',
           entityType: 'INVOICE',
           entityId: id,
-          reference: invoice.invoiceNumber,
-          oldValues: JSON.stringify({ grandTotal: invoice.grandTotal, status: invoice.status }),
-          newValues: JSON.stringify({ grandTotal: updated.grandTotal, status: updated.status }),
+          reference: updated.invoiceNumber,
+          oldValues: JSON.stringify({ invoiceNumber: invoice.invoiceNumber, grandTotal: invoice.grandTotal, status: invoice.status }),
+          newValues: JSON.stringify({ invoiceNumber: updated.invoiceNumber, grandTotal: updated.grandTotal, status: updated.status }),
         },
       });
 
@@ -634,6 +651,78 @@ export async function cancelInvoice(req: AuthRequest, res: Response) {
 
     return res.json({ message: 'Invoice cancelled successfully and stock restored' });
   } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function deleteInvoice(req: AuthRequest, res: Response) {
+  try {
+    const { id } = req.params;
+    const invoice = await prisma.invoice.findUnique({
+      where: { id },
+      include: { items: true, party: true },
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+
+    if (invoice.status !== 'DRAFT' && req.user?.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Only ADMIN users can permanently delete confirmed invoices' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Reverse stock deduction if invoice was confirmed/paid
+      if (invoice.status !== 'DRAFT' && invoice.status !== 'CANCELLED') {
+        await reverseInvoiceStockDeduction(tx, invoice.id, invoice.invoiceNumber, invoice.partyId, req.user?.id);
+      }
+
+      // 2. Clean up associated payment allocations safely
+      const payments = await tx.payment.findMany({
+        where: { allocations: { contains: id } },
+      });
+
+      for (const p of payments) {
+        if (p.allocations) {
+          try {
+            const parsed = JSON.parse(p.allocations);
+            if (Array.isArray(parsed)) {
+              const updatedAlloc = parsed.filter((a: any) => a.invoiceId !== id);
+              await tx.payment.update({
+                where: { id: p.id },
+                data: {
+                  allocations: JSON.stringify(updatedAlloc),
+                },
+              });
+            }
+          } catch (e) {
+            // ignore JSON parse error
+          }
+        }
+      }
+
+      // 3. Delete invoice items
+      await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
+
+      // 4. Delete invoice record
+      await tx.invoice.delete({ where: { id } });
+
+      // 5. Create Audit Log
+      await tx.auditLog.create({
+        data: {
+          userId: req.user?.id,
+          action: 'INVOICE_DELETE',
+          entityType: 'INVOICE',
+          entityId: id,
+          reference: invoice.invoiceNumber,
+          oldValues: JSON.stringify({ invoiceNumber: invoice.invoiceNumber, grandTotal: invoice.grandTotal }),
+        },
+      });
+    });
+
+    return res.json({ message: `Invoice ${invoice.invoiceNumber} deleted permanently and all associated effects reversed.` });
+  } catch (err: any) {
+    console.error('Delete Invoice Error:', err);
     return res.status(500).json({ error: err.message });
   }
 }

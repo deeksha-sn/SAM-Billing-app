@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Save, CheckCircle2, UserPlus, PackagePlus, FileText, BookmarkPlus } from 'lucide-react';
+import { X, Plus, Trash2, Save, CheckCircle2, UserPlus, PackagePlus, FileText, BookmarkPlus, AlertTriangle } from 'lucide-react';
 import { apiRequest } from '../api';
+import { useAuth } from '../context/AuthContext';
 import { QuickAddPartyModal } from './QuickAddPartyModal';
 import { QuickAddItemModal } from './QuickAddItemModal';
 
@@ -38,6 +39,7 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
   onClose,
   onSaved,
 }) => {
+  const { user } = useAuth();
   const isEditMode = !!invoice?.id;
 
   // Master Data
@@ -46,6 +48,7 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
   const [termsTemplates, setTermsTemplates] = useState<any[]>([]);
 
   // Form State
+  const [invoiceNumberInput, setInvoiceNumberInput] = useState(invoice?.invoiceNumber || '');
   const [selectedPartyId, setSelectedPartyId] = useState(invoice?.partyId || '');
   const [invoiceDate, setInvoiceDate] = useState(
     invoice?.invoiceDate
@@ -314,6 +317,28 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
   const roundOff = Number((grandTotal - rawGrandTotal).toFixed(2));
   const totalTax = totalCgst + totalSgst + totalIgst;
 
+  const handleDeleteBill = async () => {
+    if (!invoice?.id) return;
+
+    if (invoice.status !== 'DRAFT' && user?.role !== 'ADMIN') {
+      alert('Only ADMIN users can permanently delete confirmed invoices');
+      return;
+    }
+
+    const confirmMsg = `Are you sure you want to PERMANENTLY DELETE Invoice ${invoice.invoiceNumber}?\n\nWARNING: This will permanently remove this invoice record from the database and automatically reverse associated BOM/inventory stock, GST reports, customer ledgers, and payment allocations.`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await apiRequest(`/sales/invoices/${invoice.id}`, { method: 'DELETE' });
+      alert(`Invoice ${invoice.invoiceNumber} deleted permanently!`);
+      onClose();
+      onSaved(null);
+    } catch (err: any) {
+      alert(`Error deleting invoice: ${err.message}`);
+    }
+  };
+
   // Submit Invoice (Save Draft or Confirm)
   const handleSubmitInvoice = async (targetStatus: 'DRAFT' | 'CONFIRMED') => {
     if (!selectedPartyId) {
@@ -330,6 +355,7 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
     setIsSubmitting(true);
     try {
       const payload = {
+        invoiceNumber: invoiceNumberInput.trim() || undefined,
         partyId: selectedPartyId,
         invoiceDate,
         items: validLines,
@@ -384,6 +410,18 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
+            {isEditMode && (
+              <button
+                type="button"
+                onClick={handleDeleteBill}
+                className="flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs transition shadow"
+                title="Delete Bill Permanently"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Bill</span>
+              </button>
+            )}
+
             <button
               type="button"
               disabled={isSubmitting}
@@ -430,7 +468,23 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block font-bold text-slate-700 uppercase text-[10px] mb-1">
+                  Invoice No. {user?.role === 'ADMIN' ? '(Editable by ADMIN)' : ''}
+                </label>
+                <input
+                  type="text"
+                  value={invoiceNumberInput}
+                  disabled={user?.role !== 'ADMIN' && isEditMode}
+                  onChange={(e) => setInvoiceNumberInput(e.target.value)}
+                  placeholder="Auto-generated on save"
+                  className={`w-full p-2.5 border rounded-xl font-mono font-bold text-slate-900 ${
+                    user?.role === 'ADMIN' ? 'bg-amber-50/60 border-amber-300' : 'bg-slate-100 cursor-not-allowed'
+                  }`}
+                />
+              </div>
+
               <div>
                 <label className="block font-bold text-slate-700 uppercase text-[10px] mb-1">Select Customer *</label>
                 <select
