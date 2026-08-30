@@ -1,0 +1,12 @@
+{
+  "name": "smart-agro-machinerys-system",
+  "version": "1.0.0",
+  "description": "Smart Agro Machinerys Complete Business Management System",
+  "scripts": {
+    "setup": "cd backend && npm install && npx prisma db push && npm run prisma:seed && cd ../frontend && npm install",
+    "test": "cd backend && npm test",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm run dev",
+    "build": "cd backend && npm run build && cd ../frontend && npm run build"
+  }
+}

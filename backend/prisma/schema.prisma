@@ -1,0 +1,571 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  username     String   @unique
+  email        String?  @unique
+  passwordHash String
+  role         String   @default("OFFICE") // ADMIN, OFFICE, SERVICE_MANAGER, SERVICE_TECHNICIAN
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  invoices         Invoice[]
+  expenses         Expense[]
+  auditLogs        AuditLog[]
+  assignedMachines Machine[]     @relation("TechnicianMachines")
+  assignedServices ServiceTask[] @relation("TechnicianServices")
+}
+
+model CompanyProfile {
+  id             String   @id @default("default")
+  businessName   String   @default("Smart Agro Machinerys")
+  logoUrl        String?
+  address        String   @default("Industrial Area, Main Road")
+  phone          String   @default("+91 98765 43210")
+  email          String   @default("info@smartagromachinerys.com")
+  gstin          String   @default("29ABCDE1234F1Z5")
+  pan            String   @default("ABCDE1234F")
+  state          String   @default("Karnataka")
+  stateCode      String   @default("29")
+  pincode        String   @default("581110")
+  website        String?  @default("www.smartagromachinerys.com")
+  bankName       String   @default("State Bank of India")
+  bankAccountNo  String   @default("12345678901")
+  ifsc           String   @default("SBIN0001234")
+  upiId          String   @default("smartagro@sbi")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model SystemSettings {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+model SequenceNumber {
+  id           String   @id @default(uuid())
+  documentType String   // INVOICE, PURCHASE, QUOTATION, DELIVERY_CHALLAN, RECEIPT, SERVICE, CREDIT_NOTE, DEBIT_NOTE
+  prefix       String   // e.g. INV, PUR, QUO, DC, REC, SRV, CN, DN
+  financialYear String  // e.g. 2026-27
+  nextNumber   Int      @default(1)
+
+  @@unique([documentType, financialYear])
+}
+
+model Party {
+  id             String   @id @default(uuid())
+  name           String
+  type           String   @default("CUSTOMER") // CUSTOMER, SUPPLIER, BOTH
+  customerType   String   @default("FARMER")   // RETAIL, DEALER, FARMER, BUSINESS, OTHER
+  contactPerson  String?
+  mobile         String
+  altMobile      String?
+  email          String?
+  address        String?
+  village        String?
+  taluk          String?
+  district       String?
+  state          String   @default("Karnataka")
+  stateCode      String   @default("29")
+  pincode        String?
+  gstin          String?
+  pan            String?
+  openingBalance Float    @default(0)
+  creditLimit    Float    @default(0)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  invoices         Invoice[]
+  quotations       Quotation[]
+  proformas        ProformaInvoice[]
+  deliveryChallans DeliveryChallan[]
+  purchases        PurchaseInvoice[]
+  payments         Payment[]
+  machines         Machine[]
+  services         ServiceTask[]
+  stockMovements   StockMovement[]
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  items       Item[]
+}
+
+model Unit {
+  id     String @id @default(uuid())
+  name   String @unique
+  symbol String
+}
+
+model TermsTemplate {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items        TermsTemplateItem[]
+  invoices     Invoice[]
+  defaultItems Item[]              @relation("DefaultTermsItems")
+}
+
+model TermsTemplateItem {
+  id         String @id @default(uuid())
+  templateId String
+  text       String
+  sortOrder  Int    @default(0)
+
+  template TermsTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+}
+
+model Item {
+  id                    String   @id @default(uuid())
+  name                  String
+  sku                   String   @unique
+  type                  String   @default("FINISHED_MACHINE") // FINISHED_MACHINE, RAW_MATERIAL, SPARE_PART, COMPONENT, SERVICE, OTHER
+  categoryId            String?
+  unit                  String   @default("Nos")
+  hsnSac                String   @default("8436")
+  gstRate               Float    @default(18.0) // 0, 5, 12, 18, 28
+  purchasePrice         Float    @default(0)
+  sellingPrice          Float    @default(0)
+  wholesalePrice        Float    @default(0)
+  minStock              Float    @default(5)
+  currentStock          Float    @default(0)
+  description           String?
+  defaultTermsTemplateId String?
+  active                Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  category Category? @relation(fields: [categoryId], references: [id])
+  defaultTermsTemplate TermsTemplate? @relation("DefaultTermsItems", fields: [defaultTermsTemplateId], references: [id])
+
+  bomHeader      BOMHeader?      @relation("FinishedItemBOM")
+  bomAsComponent BOMItem[]       @relation("ComponentItem")
+  invoiceItems   InvoiceItem[]
+  purchaseItems  PurchaseItem[]
+  quotationItems QuotationItem[]
+  proformaItems  ProformaItem[]
+  challanItems   DeliveryChallanItem[]
+  stockMovements StockMovement[]
+  machines       Machine[]       @relation("MachineItem")
+  serviceParts   ServicePart[]
+}
+
+model BOMHeader {
+  id             String   @id @default(uuid())
+  finishedItemId String   @unique
+  name           String
+  notes          String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  finishedItem Item      @relation("FinishedItemBOM", fields: [finishedItemId], references: [id])
+  components   BOMItem[]
+}
+
+model BOMItem {
+  id              String @id @default(uuid())
+  bomHeaderId     String
+  componentItemId String
+  quantity        Float
+
+  bomHeader     BOMHeader @relation(fields: [bomHeaderId], references: [id], onDelete: Cascade)
+  componentItem Item      @relation("ComponentItem", fields: [componentItemId], references: [id])
+}
+
+model Invoice {
+  id                String   @id @default(uuid())
+  invoiceNumber     String   @unique
+  financialYear     String
+  invoiceDate       DateTime
+  partyId           String
+  billingAddress    String?
+  deliveryAddress   String?
+  customerStateCode  String   @default("29")
+  isInterState      Boolean  @default(false)
+  ewayBillNo        String?
+  placeOfSupply     String?
+  poNumber          String?
+  poDate            DateTime?
+  termsTemplateId   String?
+  termsSnapshot     String?  // JSON string storing array of terms e.g. ["1. Company...", "2. No..."]
+  taxableAmount     Float    @default(0)
+  cgstAmount        Float    @default(0)
+  sgstAmount        Float    @default(0)
+  igstAmount        Float    @default(0)
+  roundOff          Float    @default(0)
+  grandTotal        Float    @default(0)
+  amountPaid        Float    @default(0)
+  balanceDue        Float    @default(0)
+  paymentMode       String   @default("Credit") // Cash, UPI, Bank Transfer, Card, Credit, Other
+  status            String   @default("CONFIRMED") // DRAFT, CONFIRMED, PAID, PARTIALLY_PAID, UNPAID, CANCELLED
+  notes             String?
+  createdById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  party            Party             @relation(fields: [partyId], references: [id])
+  createdBy        User?             @relation(fields: [createdById], references: [id])
+  termsTemplate    TermsTemplate?    @relation(fields: [termsTemplateId], references: [id])
+  items            InvoiceItem[]
+  deliveryChallans DeliveryChallan[]
+  machines         Machine[]
+}
+
+model InvoiceItem {
+  id             String @id @default(uuid())
+  invoiceId      String
+  itemId         String
+  itemName       String
+  hsnSac         String
+  unit           String
+  quantity       Float
+  rate           Float
+  discountPercent Float  @default(0)
+  discountAmount  Float  @default(0)
+  taxableValue   Float
+  gstRate        Float
+  cgstAmount     Float  @default(0)
+  sgstAmount     Float  @default(0)
+  igstAmount     Float  @default(0)
+  totalAmount    Float
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  item    Item    @relation(fields: [itemId], references: [id])
+}
+
+model Quotation {
+  id               String   @id @default(uuid())
+  quotationNumber  String   @unique
+  financialYear    String
+  quotationDate    DateTime
+  validityDate     DateTime?
+  partyId          String
+  customerStateCode String  @default("29")
+  isInterState     Boolean  @default(false)
+  taxableAmount    Float    @default(0)
+  cgstAmount       Float    @default(0)
+  sgstAmount       Float    @default(0)
+  igstAmount       Float    @default(0)
+  roundOff         Float    @default(0)
+  grandTotal       Float    @default(0)
+  terms            String?
+  notes            String?
+  status           String   @default("ACTIVE") // ACTIVE, CONVERTED, EXPIRED, CANCELLED
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  party Party           @relation(fields: [partyId], references: [id])
+  items QuotationItem[]
+}
+
+model QuotationItem {
+  id             String @id @default(uuid())
+  quotationId    String
+  itemId         String
+  itemName       String
+  hsnSac         String
+  unit           String
+  quantity       Float
+  rate           Float
+  discountPercent Float  @default(0)
+  discountAmount  Float  @default(0)
+  taxableValue   Float
+  gstRate        Float
+  totalAmount    Float
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  item      Item      @relation(fields: [itemId], references: [id])
+}
+
+model ProformaInvoice {
+  id               String   @id @default(uuid())
+  proformaNumber   String   @unique
+  financialYear    String
+  proformaDate     DateTime
+  partyId          String
+  customerStateCode String  @default("29")
+  isInterState     Boolean  @default(false)
+  taxableAmount    Float    @default(0)
+  cgstAmount       Float    @default(0)
+  sgstAmount       Float    @default(0)
+  igstAmount       Float    @default(0)
+  roundOff         Float    @default(0)
+  grandTotal       Float    @default(0)
+  status           String   @default("ACTIVE") // ACTIVE, CONVERTED, CANCELLED
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  party Party          @relation(fields: [partyId], references: [id])
+  items ProformaItem[]
+}
+
+model ProformaItem {
+  id                String @id @default(uuid())
+  proformaInvoiceId String
+  itemId            String
+  itemName          String
+  hsnSac            String
+  unit              String
+  quantity          Float
+  rate              Float
+  discountPercent   Float  @default(0)
+  discountAmount    Float  @default(0)
+  taxableValue      Float
+  gstRate           Float
+  totalAmount       Float
+
+  proformaInvoice ProformaInvoice @relation(fields: [proformaInvoiceId], references: [id], onDelete: Cascade)
+  item            Item            @relation(fields: [itemId], references: [id])
+}
+
+model DeliveryChallan {
+  id            String   @id @default(uuid())
+  challanNumber String   @unique
+  financialYear String
+  challanDate   DateTime
+  partyId       String
+  deliveryAddress String?
+  contactNumber String?
+  vehicleNumber String?
+  transporter   String?
+  reason        String   @default("Delivery against sale") // Delivery against sale, Service, Repair, Replacement, Demonstration, Job work, Other
+  refOrderNo    String?
+  affectsStock  Boolean  @default(true) // Configurable
+  stockDeducted Boolean  @default(false)
+  status        String   @default("CONFIRMED") // CONFIRMED, CONVERTED_TO_INVOICE, CANCELLED
+  notes         String?
+  invoiceId     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  party   Party                 @relation(fields: [partyId], references: [id])
+  invoice Invoice?              @relation(fields: [invoiceId], references: [id])
+  items   DeliveryChallanItem[]
+}
+
+model DeliveryChallanItem {
+  id                String @id @default(uuid())
+  deliveryChallanId String
+  itemId            String
+  itemName          String
+  unit              String
+  quantity          Float
+
+  deliveryChallan DeliveryChallan @relation(fields: [deliveryChallanId], references: [id], onDelete: Cascade)
+  item            Item            @relation(fields: [itemId], references: [id])
+}
+
+model PurchaseInvoice {
+  id                 String   @id @default(uuid())
+  purchaseNumber     String   @unique
+  supplierInvoiceNo  String?
+  financialYear      String
+  purchaseDate       DateTime
+  partyId            String
+  supplierStateCode  String   @default("29")
+  isInterState       Boolean  @default(false)
+  taxableAmount      Float    @default(0)
+  cgstAmount         Float    @default(0)
+  sgstAmount         Float    @default(0)
+  igstAmount         Float    @default(0)
+  roundOff           Float    @default(0)
+  grandTotal         Float    @default(0)
+  amountPaid         Float    @default(0)
+  balanceDue         Float    @default(0)
+  status             String   @default("CONFIRMED") // CONFIRMED, PAID, PARTIALLY_PAID, UNPAID, CANCELLED
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  party Party          @relation(fields: [partyId], references: [id])
+  items PurchaseItem[]
+}
+
+model PurchaseItem {
+  id                String @id @default(uuid())
+  purchaseInvoiceId String
+  itemId            String
+  itemName          String
+  hsnSac            String
+  unit              String
+  quantity          Float
+  rate              Float
+  discountPercent   Float  @default(0)
+  taxableValue      Float
+  gstRate           Float
+  cgstAmount        Float  @default(0)
+  sgstAmount        Float  @default(0)
+  igstAmount        Float  @default(0)
+  totalAmount       Float
+
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+  item            Item            @relation(fields: [itemId], references: [id])
+}
+
+model CreditNote {
+  id            String   @id @default(uuid())
+  cnNumber      String   @unique
+  financialYear String
+  date          DateTime
+  partyId       String
+  invoiceId     String?
+  totalAmount   Float
+  reason        String?
+  createdAt     DateTime @default(now())
+}
+
+model DebitNote {
+  id            String   @id @default(uuid())
+  dnNumber      String   @unique
+  financialYear String
+  date          DateTime
+  partyId       String
+  purchaseId    String?
+  totalAmount   Float
+  reason        String?
+  createdAt     DateTime @default(now())
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  receiptNo     String   @unique
+  financialYear String
+  paymentType   String   @default("CUSTOMER_PAYMENT") // CUSTOMER_PAYMENT, SUPPLIER_PAYMENT
+  partyId       String
+  date          DateTime
+  amount        Float
+  paymentMode   String   @default("Cash") // Cash, UPI, Bank Transfer, Card, Cheque, Credit, Other
+  referenceNo   String?
+  notes         String?
+  allocations   String?  // JSON string storing invoice allocations
+  createdAt     DateTime @default(now())
+
+  party Party @relation(fields: [partyId], references: [id])
+}
+
+model StockMovement {
+  id            String   @id @default(uuid())
+  itemId        String
+  movementType  String   // OPENING, PURCHASE, SALE, BOM_CONSUMPTION, SERVICE_CONSUMPTION, SALES_RETURN, PURCHASE_RETURN, ADJUSTMENT_IN, ADJUSTMENT_OUT, DAMAGE, MANUAL_ISSUE, MANUAL_RECEIPT
+  quantity      Float
+  previousStock Float
+  newStock      Float
+  referenceType String?  // INVOICE, PURCHASE, CHALLAN, SERVICE, ADJUSTMENT
+  referenceId   String?  // Document number or ID
+  partyId       String?
+  userId        String?
+  notes         String?
+  date          DateTime @default(now())
+
+  item  Item   @relation(fields: [itemId], references: [id])
+  party Party? @relation(fields: [partyId], references: [id])
+}
+
+model Machine {
+  id                  String    @id @default(uuid())
+  partyId             String
+  machineItemId       String
+  model               String
+  serialNumber        String    @unique
+  invoiceId           String?
+  saleDate            DateTime  @default(now())
+  warrantyStart       DateTime  @default(now())
+  warrantyEnd         DateTime
+  serviceIntervalDays Int       @default(90)
+  nextServiceDate     DateTime?
+  location            String?
+  assignedTechnicianId String?
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  party              Party         @relation(fields: [partyId], references: [id])
+  machineItem        Item          @relation("MachineItem", fields: [machineItemId], references: [id])
+  invoice            Invoice?      @relation(fields: [invoiceId], references: [id])
+  assignedTechnician User?         @relation("TechnicianMachines", fields: [assignedTechnicianId], references: [id])
+  services           ServiceTask[]
+}
+
+model ServiceTask {
+  id                  String    @id @default(uuid())
+  serviceNo           String    @unique
+  machineId           String
+  partyId             String
+  serialNumber        String
+  serviceDueDate      DateTime
+  serviceIntervalDays Int       @default(90)
+  assignedTechnicianId String?
+  status              String    @default("SCHEDULED") // SCHEDULED, ASSIGNED, IN_PROGRESS, COMPLETED, RESCHEDULED, CANCELLED, CUSTOMER_UNAVAILABLE
+  workPerformed       String?
+  technicianNotes     String?
+  photos              String?   // JSON Array string of base64/URL photo strings
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  machine            Machine       @relation(fields: [machineId], references: [id])
+  party              Party         @relation(fields: [partyId], references: [id])
+  assignedTechnician User?         @relation("TechnicianServices", fields: [assignedTechnicianId], references: [id])
+  parts              ServicePart[]
+}
+
+model ServicePart {
+  id            String @id @default(uuid())
+  serviceTaskId String
+  itemId        String
+  quantity      Float
+  rate          Float  @default(0)
+  amount        Float  @default(0)
+
+  serviceTask ServiceTask @relation(fields: [serviceTaskId], references: [id], onDelete: Cascade)
+  item        Item        @relation(fields: [itemId], references: [id])
+}
+
+model Expense {
+  id             String   @id @default(uuid())
+  category       String   // Fuel, Transport, Salary, Electricity, Rent, Repair, Office, Travel, Maintenance, Other
+  description    String
+  amount         Float
+  paymentMode    String   @default("Cash")
+  date           DateTime @default(now())
+  attachmentUrl  String?
+  notes          String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  createdBy User? @relation(fields: [createdById], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String   // INVOICE_CREATE, INVOICE_EDIT, INVOICE_CANCEL, STOCK_ADJUST, PAYMENT_RECORD, SERVICE_COMPLETE, USER_LOGIN, SETTINGS_CHANGE
+  entityType String
+  entityId   String?
+  reference  String?
+  oldValues  String?  // JSON string
+  newValues  String?  // JSON string
+  timestamp  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}

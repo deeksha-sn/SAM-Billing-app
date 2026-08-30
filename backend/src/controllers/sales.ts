@@ -1,0 +1,543 @@
+import { Response } from 'express';
+import { prisma } from '../db';
+import { AuthRequest } from '../middleware/auth';
+import { generateDocumentNumber } from '../utils/numbering';
+import { calculateGST, isInterStateTransaction } from '../utils/gst';
+
+// Helper function to process BOM & Stock Deduction in a transaction
+async function applyInvoiceStockDeduction(tx: any, invoiceId: string, invoiceNumber: string, partyId: string, userId?: string) {
+  const invoice = await tx.invoice.findUnique({
+    where: { id: invoiceId },
+    include: { items: true },
+  });
+
+  if (!invoice) return;
+
+  for (const item of invoice.items) {
+    const itemMaster = await tx.item.findUnique({
+      where: { id: item.itemId },
+      include: {
+        bomHeader: {
+          include: { components: true },
+        },
+      },
+    });
+
+    if (!itemMaster) continue;
+
+    if (itemMaster.type === 'FINISHED_MACHINE' && itemMaster.bomHeader && itemMaster.bomHeader.active) {
+      // Finished machine with active BOM -> Deduct BOM components
+      for (const comp of itemMaster.bomHeader.components) {
+        const compItem = await tx.item.findUnique({ where: { id: comp.componentItemId } });
+        if (!compItem) continue;
+
+        const qtyToDeduct = comp.quantity * item.quantity;
+        const prevStock = compItem.currentStock;
+        const newStock = prevStock - qtyToDeduct;
+
+        await tx.item.update({
+          where: { id: comp.componentItemId },
+          data: { currentStock: newStock },
+        });
+
+        await tx.stockMovement.create({
+          data: {
+            itemId: comp.componentItemId,
+            movementType: 'BOM_CONSUMPTION',
+            quantity: qtyToDeduct,
+            previousStock: prevStock,
+            newStock: newStock,
+            referenceType: 'INVOICE',
+            referenceId: invoiceNumber,
+            partyId: partyId,
+            userId: userId,
+            notes: `BOM consumption for ${item.quantity} x ${itemMaster.name} (Invoice ${invoiceNumber})`,
+          },
+        });
+      }
+    } else {
+      // Standard item without BOM -> Deduct item directly
+      const prevStock = itemMaster.currentStock;
+      const newStock = prevStock - item.quantity;
+
+      await tx.item.update({
+        where: { id: item.itemId },
+        data: { currentStock: newStock },
+      });
+
+      await tx.stockMovement.create({
+        data: {
+          itemId: item.itemId,
+          movementType: 'SALE',
+          quantity: item.quantity,
+          previousStock: prevStock,
+          newStock: newStock,
+          referenceType: 'INVOICE',
+          referenceId: invoiceNumber,
+          partyId: partyId,
+          userId: userId,
+          notes: `Direct sale via Invoice ${invoiceNumber}`,
+        },
+      });
+    }
+  }
+}
+
+// Helper function to reverse stock deduction (for invoice edit or cancel)
+async function reverseInvoiceStockDeduction(tx: any, invoiceId: string, invoiceNumber: string, partyId: string, userId?: string) {
+  const invoice = await tx.invoice.findUnique({
+    where: { id: invoiceId },
+    include: { items: true },
+  });
+
+  if (!invoice) return;
+
+  for (const item of invoice.items) {
+    const itemMaster = await tx.item.findUnique({
+      where: { id: item.itemId },
+      include: {
+        bomHeader: {
+          include: { components: true },
+        },
+      },
+    });
+
+    if (!itemMaster) continue;
+
+    if (itemMaster.type === 'FINISHED_MACHINE' && itemMaster.bomHeader && itemMaster.bomHeader.active) {
+      // Reverse BOM components
+      for (const comp of itemMaster.bomHeader.components) {
+        const compItem = await tx.item.findUnique({ where: { id: comp.componentItemId } });
+        if (!compItem) continue;
+
+        const qtyToRestore = comp.quantity * item.quantity;
+        const prevStock = compItem.currentStock;
+        const newStock = prevStock + qtyToRestore;
+
+        await tx.item.update({
+          where: { id: comp.componentItemId },
+          data: { currentStock: newStock },
+        });
+
+        await tx.stockMovement.create({
+          data: {
+            itemId: comp.componentItemId,
+            movementType: 'SALES_RETURN',
+            quantity: qtyToRestore,
+            previousStock: prevStock,
+            newStock: newStock,
+            referenceType: 'INVOICE_REVERSAL',
+            referenceId: invoiceNumber,
+            partyId: partyId,
+            userId: userId,
+            notes: `Reversed BOM consumption for ${itemMaster.name} (Invoice ${invoiceNumber})`,
+          },
+        });
+      }
+    } else {
+      // Reverse direct item stock
+      const prevStock = itemMaster.currentStock;
+      const newStock = prevStock + item.quantity;
+
+      await tx.item.update({
+        where: { id: item.itemId },
+        data: { currentStock: newStock },
+      });
+
+      await tx.stockMovement.create({
+        data: {
+          itemId: item.itemId,
+          movementType: 'SALES_RETURN',
+          quantity: item.quantity,
+          previousStock: prevStock,
+          newStock: newStock,
+          referenceType: 'INVOICE_REVERSAL',
+          referenceId: invoiceNumber,
+          partyId: partyId,
+          userId: userId,
+          notes: `Reversed direct sale for Invoice ${invoiceNumber}`,
+        },
+      });
+    }
+  }
+}
+
+export async function getInvoices(req: AuthRequest, res: Response) {
+  try {
+    const { partyId, status, search } = req.query;
+    const where: any = {};
+
+    if (partyId) where.partyId = partyId as string;
+    if (status) where.status = status as string;
+    if (search) {
+      const q = String(search).trim();
+      where.OR = [
+        { invoiceNumber: { contains: q } },
+        { party: { name: { contains: q } } },
+        { party: { mobile: { contains: q } } },
+      ];
+    }
+
+    const invoices = await prisma.invoice.findMany({
+      where,
+      include: { party: true, items: { include: { item: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return res.json({ invoices });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function getInvoiceById(req: AuthRequest, res: Response) {
+  try {
+    const { id } = req.params;
+    const invoice = await prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        party: true,
+        items: { include: { item: true } },
+        createdBy: { select: { name: true, role: true } },
+        deliveryChallans: true,
+        machines: true,
+      },
+    });
+
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    return res.json({ invoice });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function createInvoice(req: AuthRequest, res: Response) {
+  try {
+    const {
+      partyId,
+      invoiceDate,
+      items,
+      paymentMode,
+      amountPaid,
+      status,
+      notes,
+      deliveryChallanId,
+      machineSerials,
+      ewayBillNo,
+      placeOfSupply,
+      poNumber,
+      poDate,
+      termsTemplateId,
+      termsSnapshot,
+    } = req.body;
+
+    if (!partyId || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Customer and invoice line items are required' });
+    }
+
+    const party = await prisma.party.findUnique({ where: { id: partyId } });
+    if (!party) return res.status(404).json({ error: 'Customer not found' });
+
+    const company = await prisma.companyProfile.findUnique({ where: { id: 'default' } });
+    const companyStateCode = company?.stateCode || '29';
+    const isInterState = isInterStateTransaction(companyStateCode, party.stateCode);
+
+    // Calculate item tax details
+    let totalTaxable = 0;
+    let totalCgst = 0;
+    let totalSgst = 0;
+    let totalIgst = 0;
+    let rawGrandTotal = 0;
+
+    const processedItems = items.map((line: any) => {
+      const qty = Number(line.quantity) || 1;
+      const rate = Number(line.rate) || 0;
+      const discountPercent = Number(line.discountPercent) || 0;
+      const gstRate = Number(line.gstRate) || 18;
+
+      const calc = calculateGST(qty, rate, discountPercent, gstRate, isInterState);
+
+      totalTaxable += calc.taxableValue;
+      totalCgst += calc.cgstAmount;
+      totalSgst += calc.sgstAmount;
+      totalIgst += calc.igstAmount;
+      rawGrandTotal += calc.totalAmount;
+
+      return {
+        itemId: line.itemId,
+        itemName: line.itemName || 'Item',
+        hsnSac: line.hsnSac || '8436',
+        unit: line.unit || 'Nos',
+        quantity: qty,
+        rate: rate,
+        discountPercent: discountPercent,
+        discountAmount: Number(((qty * rate * discountPercent) / 100).toFixed(2)),
+        taxableValue: calc.taxableValue,
+        gstRate: gstRate,
+        cgstAmount: calc.cgstAmount,
+        sgstAmount: calc.sgstAmount,
+        igstAmount: calc.igstAmount,
+        totalAmount: calc.totalAmount,
+        serialNumber: line.serialNumber, // Optional machine serial number
+      };
+    });
+
+    const grandTotal = Math.round(rawGrandTotal);
+    const roundOff = Number((grandTotal - rawGrandTotal).toFixed(2));
+    const initialPaid = Number(amountPaid) || 0;
+    const balanceDue = grandTotal - initialPaid;
+
+    let invoiceStatus = status || 'CONFIRMED';
+    if (invoiceStatus === 'CONFIRMED') {
+      if (initialPaid >= grandTotal) invoiceStatus = 'PAID';
+      else if (initialPaid > 0) invoiceStatus = 'PARTIALLY_PAID';
+      else invoiceStatus = 'UNPAID';
+    }
+
+    const formattedTermsSnapshot = Array.isArray(termsSnapshot)
+      ? JSON.stringify(termsSnapshot.filter((t: any) => typeof t === 'string' && t.trim().length > 0))
+      : typeof termsSnapshot === 'string'
+      ? termsSnapshot
+      : null;
+
+    // Execute atomic transaction for Invoice + Stock Deduction + Ledger
+    const invoice = await prisma.$transaction(async (tx) => {
+      const { docNumber, fy } = await generateDocumentNumber('INVOICE', 'INV', tx);
+
+      const createdInvoice = await tx.invoice.create({
+        data: {
+          invoiceNumber: docNumber,
+          financialYear: fy,
+          invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
+          partyId: party.id,
+          billingAddress: party.address || party.village || '',
+          deliveryAddress: party.address || party.village || '',
+          customerStateCode: party.stateCode,
+          isInterState: isInterState,
+          ewayBillNo: ewayBillNo ? String(ewayBillNo).trim() : null,
+          placeOfSupply: placeOfSupply ? String(placeOfSupply).trim() : `${party.stateCode}-${party.state}`,
+          poNumber: poNumber ? String(poNumber).trim() : null,
+          poDate: poDate ? new Date(poDate) : null,
+          termsTemplateId: termsTemplateId ? String(termsTemplateId) : null,
+          termsSnapshot: formattedTermsSnapshot,
+          taxableAmount: Number(totalTaxable.toFixed(2)),
+          cgstAmount: Number(totalCgst.toFixed(2)),
+          sgstAmount: Number(totalSgst.toFixed(2)),
+          igstAmount: Number(totalIgst.toFixed(2)),
+          roundOff: roundOff,
+          grandTotal: grandTotal,
+          amountPaid: initialPaid,
+          balanceDue: balanceDue,
+          paymentMode: paymentMode || 'Credit',
+          status: invoiceStatus,
+          notes: notes,
+          createdById: req.user?.id,
+          items: {
+            create: processedItems.map(({ serialNumber, ...rest }) => rest),
+          },
+        },
+      });
+
+      // Handle Delivery Challan conversion link
+      if (deliveryChallanId) {
+        await tx.deliveryChallan.update({
+          where: { id: deliveryChallanId },
+          data: { status: 'CONVERTED_TO_INVOICE', invoiceId: createdInvoice.id },
+        });
+      }
+
+      // Check if stock deduction should apply
+      if (invoiceStatus !== 'DRAFT' && invoiceStatus !== 'CANCELLED') {
+        // Check delivery challan stock setting
+        let skipStockDeduction = false;
+        if (deliveryChallanId) {
+          const dc = await tx.deliveryChallan.findUnique({ where: { id: deliveryChallanId } });
+          if (dc && dc.affectsStock && dc.stockDeducted) {
+            // DC already deducted stock, skip duplicate deduction!
+            skipStockDeduction = true;
+          }
+        }
+
+        if (!skipStockDeduction) {
+          await applyInvoiceStockDeduction(tx, createdInvoice.id, docNumber, party.id, req.user?.id);
+        }
+      }
+
+      // Auto-register Machines with serial numbers if provided
+      for (const pItem of processedItems) {
+        if (pItem.serialNumber && pItem.serialNumber.trim()) {
+          const itemMaster = await tx.item.findUnique({ where: { id: pItem.itemId } });
+          if (itemMaster && itemMaster.type === 'FINISHED_MACHINE') {
+            const warStart = new Date();
+            const warEnd = new Date(warStart);
+            warEnd.setFullYear(warEnd.getFullYear() + 1); // 12 months default
+
+            await tx.machine.upsert({
+              where: { serialNumber: pItem.serialNumber.trim() },
+              update: {
+                partyId: party.id,
+                invoiceId: createdInvoice.id,
+                saleDate: warStart,
+              },
+              create: {
+                partyId: party.id,
+                machineItemId: pItem.itemId,
+                model: itemMaster.name,
+                serialNumber: pItem.serialNumber.trim(),
+                invoiceId: createdInvoice.id,
+                saleDate: warStart,
+                warrantyStart: warStart,
+                warrantyEnd: warEnd,
+                serviceIntervalDays: 90,
+                nextServiceDate: new Date(warStart.getTime() + 90 * 24 * 60 * 60 * 1000),
+                location: `${party.village || ''}, ${party.district || ''}`,
+              },
+            });
+          }
+        }
+      }
+
+      // If initial payment made, record payment receipt
+      if (initialPaid > 0) {
+        const { docNumber: recNumber, fy: recFy } = await generateDocumentNumber('RECEIPT', 'REC', tx);
+        await tx.payment.create({
+          data: {
+            receiptNo: recNumber,
+            financialYear: recFy,
+            paymentType: 'CUSTOMER_PAYMENT',
+            partyId: party.id,
+            date: invoiceDate ? new Date(invoiceDate) : new Date(),
+            amount: initialPaid,
+            paymentMode: paymentMode || 'Cash',
+            notes: `Payment for Invoice ${docNumber}`,
+            allocations: JSON.stringify([{ invoiceId: createdInvoice.id, amount: initialPaid }]),
+          },
+        });
+      }
+
+      // Audit Log
+      await tx.auditLog.create({
+        data: {
+          userId: req.user?.id,
+          action: 'INVOICE_CREATE',
+          entityType: 'INVOICE',
+          entityId: createdInvoice.id,
+          reference: docNumber,
+          newValues: JSON.stringify({ grandTotal, status: invoiceStatus }),
+        },
+      });
+
+      return createdInvoice;
+    });
+
+    return res.status(201).json({ invoice });
+  } catch (err: any) {
+    console.error('Invoice Creation Error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function updateInvoice(req: AuthRequest, res: Response) {
+  try {
+    const { id } = req.params;
+    const {
+      status,
+      notes,
+      amountPaid,
+      ewayBillNo,
+      placeOfSupply,
+      poNumber,
+      poDate,
+      termsTemplateId,
+      termsSnapshot,
+    } = req.body;
+
+    const invoice = await prisma.invoice.findUnique({ where: { id }, include: { party: true } });
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+
+    const formattedTermsSnapshot = termsSnapshot !== undefined
+      ? (Array.isArray(termsSnapshot)
+          ? JSON.stringify(termsSnapshot.filter((t: any) => typeof t === 'string' && t.trim().length > 0))
+          : typeof termsSnapshot === 'string'
+          ? termsSnapshot
+          : null)
+      : invoice.termsSnapshot;
+
+    const result = await prisma.$transaction(async (tx) => {
+      let newStatus = status || invoice.status;
+
+      // Handle cancellation logic safely
+      if (newStatus === 'CANCELLED' && invoice.status !== 'CANCELLED') {
+        // Reverse stock
+        await reverseInvoiceStockDeduction(tx, invoice.id, invoice.invoiceNumber, invoice.partyId, req.user?.id);
+      } else if (invoice.status === 'CANCELLED' && newStatus !== 'CANCELLED') {
+        // Re-apply stock
+        await applyInvoiceStockDeduction(tx, invoice.id, invoice.invoiceNumber, invoice.partyId, req.user?.id);
+      }
+
+      const updated = await tx.invoice.update({
+        where: { id },
+        data: {
+          status: newStatus,
+          notes: notes !== undefined ? notes : invoice.notes,
+          ewayBillNo: ewayBillNo !== undefined ? (ewayBillNo ? String(ewayBillNo).trim() : null) : invoice.ewayBillNo,
+          placeOfSupply: placeOfSupply !== undefined ? (placeOfSupply ? String(placeOfSupply).trim() : null) : invoice.placeOfSupply,
+          poNumber: poNumber !== undefined ? (poNumber ? String(poNumber).trim() : null) : invoice.poNumber,
+          poDate: poDate !== undefined ? (poDate ? new Date(poDate) : null) : invoice.poDate,
+          termsTemplateId: termsTemplateId !== undefined ? (termsTemplateId ? String(termsTemplateId) : null) : invoice.termsTemplateId,
+          termsSnapshot: formattedTermsSnapshot,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: req.user?.id,
+          action: 'INVOICE_EDIT',
+          entityType: 'INVOICE',
+          entityId: id,
+          reference: invoice.invoiceNumber,
+          oldValues: JSON.stringify({ status: invoice.status }),
+          newValues: JSON.stringify({ status: newStatus }),
+        },
+      });
+
+      return updated;
+    });
+
+    return res.json({ invoice: result });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function cancelInvoice(req: AuthRequest, res: Response) {
+  try {
+    const { id } = req.params;
+    const invoice = await prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    if (invoice.status === 'CANCELLED') {
+      return res.status(400).json({ error: 'Invoice is already cancelled' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await reverseInvoiceStockDeduction(tx, invoice.id, invoice.invoiceNumber, invoice.partyId, req.user?.id);
+      await tx.invoice.update({
+        where: { id },
+        data: { status: 'CANCELLED' },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: req.user?.id,
+          action: 'INVOICE_CANCEL',
+          entityType: 'INVOICE',
+          entityId: id,
+          reference: invoice.invoiceNumber,
+        },
+      });
+    });
+
+    return res.json({ message: 'Invoice cancelled successfully and stock restored' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+}
