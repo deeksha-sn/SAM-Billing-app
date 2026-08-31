@@ -290,19 +290,22 @@ model Quotation {
 }
 
 model QuotationItem {
-  id             String @id @default(uuid())
-  quotationId    String
-  itemId         String
-  itemName       String
-  hsnSac         String
-  unit           String
-  quantity       Float
-  rate           Float
+  id              String @id @default(uuid())
+  quotationId     String
+  itemId          String
+  itemName        String
+  hsnSac          String
+  unit            String
+  quantity        Float
+  rate            Float
   discountPercent Float  @default(0)
   discountAmount  Float  @default(0)
-  taxableValue   Float
-  gstRate        Float
-  totalAmount    Float
+  taxableValue    Float
+  gstRate         Float
+  cgstAmount      Float  @default(0)
+  sgstAmount      Float  @default(0)
+  igstAmount      Float  @default(0)
+  totalAmount     Float
 
   quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   item      Item      @relation(fields: [itemId], references: [id])

@@ -8,6 +8,7 @@ import { getParties, getPartyById, createParty, updateParty, deleteParty } from 
 import { getItems, getItemById, createItem, updateItem, adjustStock, getCategories, createCategory, getUnits, createUnit } from '../controllers/items';
 import { getBOMs, getBOMByFinishedItem, saveBOM } from '../controllers/bom';
 import { getInvoices, getInvoiceById, createInvoice, updateInvoice, cancelInvoice, deleteInvoice } from '../controllers/sales';
+import { getQuotations, getQuotationById, createQuotation, updateQuotation, deleteQuotation, convertQuotationToInvoice } from '../controllers/quotations';
 import { getDeliveryChallans, createDeliveryChallan } from '../controllers/deliveryChallans';
 import { getPurchases, createPurchase } from '../controllers/purchases';
 import { getPayments, createPayment } from '../controllers/payments';
@@ -79,6 +80,14 @@ router.post('/sales/invoices', createInvoice);
 router.put('/sales/invoices/:id', updateInvoice);
 router.post('/sales/invoices/:id/cancel', cancelInvoice);
 router.delete('/sales/invoices/:id', deleteInvoice);
+
+// Quotations
+router.get('/quotations', getQuotations);
+router.get('/quotations/:id', getQuotationById);
+router.post('/quotations', createQuotation);
+router.put('/quotations/:id', updateQuotation);
+router.delete('/quotations/:id', deleteQuotation);
+router.post('/quotations/:id/convert-to-invoice', convertQuotationToInvoice);
 
 // Delivery Challans
 router.get('/delivery-challans', getDeliveryChallans);

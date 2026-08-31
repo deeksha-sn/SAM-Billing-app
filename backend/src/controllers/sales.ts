@@ -5,7 +5,7 @@ import { generateDocumentNumber } from '../utils/numbering';
 import { calculateGST, isInterStateTransaction } from '../utils/gst';
 
 // Helper function to process BOM & Stock Deduction in a transaction
-async function applyInvoiceStockDeduction(tx: any, invoiceId: string, invoiceNumber: string, partyId: string, userId?: string) {
+export async function applyInvoiceStockDeduction(tx: any, invoiceId: string, invoiceNumber: string, partyId: string, userId?: string) {
   const invoice = await tx.invoice.findUnique({
     where: { id: invoiceId },
     include: { items: true },
