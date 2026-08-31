@@ -151,21 +151,48 @@ export const Dashboard: React.FC = () => {
           </span>
         </div>
 
-        {/* Services Due Today */}
+        {/* Services Due Today Widget */}
         <div
           onClick={() => navigate('/services')}
-          className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md hover:border-teal-500 transition cursor-pointer group"
+          className="bg-emerald-950 p-5 rounded-2xl border border-emerald-900 shadow-md text-white hover:shadow-lg transition cursor-pointer group col-span-1 sm:col-span-2 lg:col-span-4"
         >
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Services Due Today</span>
-            <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center group-hover:scale-110 transition">
-              <Wrench className="w-5 h-5" />
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-800/80 text-emerald-300 flex items-center justify-center shrink-0">
+                <Wrench className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-white">TODAY'S SERVICE DISPATCH & REMINDERS</h3>
+                <p className="text-xs text-emerald-300/80 font-medium">Real-Time Machine Service Workload & Technician Dispatch</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 text-center font-mono">
+              <div className="bg-emerald-900/80 px-3 py-1.5 rounded-xl border border-emerald-800">
+                <div className="text-[10px] text-emerald-300 font-sans uppercase font-bold">Today</div>
+                <div className="text-xl font-black text-white">{s.servicesDueToday || 0}</div>
+              </div>
+              <div className="bg-red-950/80 px-3 py-1.5 rounded-xl border border-red-800">
+                <div className="text-[10px] text-red-300 font-sans uppercase font-bold">Overdue</div>
+                <div className="text-xl font-black text-red-400">{s.overdueServicesCount || 0}</div>
+              </div>
+              <div className="bg-blue-950/80 px-3 py-1.5 rounded-xl border border-blue-800">
+                <div className="text-[10px] text-blue-300 font-sans uppercase font-bold">Upcoming</div>
+                <div className="text-xl font-black text-blue-300">{s.upcomingServicesCount || 0}</div>
+              </div>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate('/services');
+                }}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-black text-xs rounded-xl shadow transition flex items-center gap-1"
+              >
+                <span>View Today's Services</span>
+                <ArrowUpRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
-          <p className="text-2xl font-black text-teal-700 font-mono">{s.servicesDueToday}</p>
-          <span className="text-xs text-teal-600 font-semibold flex items-center gap-1 mt-2">
-            View Service Board <ArrowUpRight className="w-3 h-3" />
-          </span>
         </div>
 
         {/* Low Stock Warning */}

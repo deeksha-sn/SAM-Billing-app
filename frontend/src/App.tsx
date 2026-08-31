@@ -11,7 +11,7 @@ import { Quotations } from './pages/Quotations';
 import { Purchases } from './pages/Purchases';
 import { Parties } from './pages/Parties';
 import { Inventory } from './pages/Inventory';
-import { Services } from './pages/Services';
+import { ServiceManagement as Services } from './pages/ServiceManagement';
 import { TechnicianMobile } from './pages/TechnicianMobile';
 import { Expenses } from './pages/Expenses';
 import { Accounting } from './pages/Accounting';

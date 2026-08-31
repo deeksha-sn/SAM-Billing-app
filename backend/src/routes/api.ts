@@ -13,7 +13,8 @@ import { getDeliveryChallans, getDeliveryChallanById, createDeliveryChallan, upd
 import { getPurchases, getPurchaseById, createPurchase, updatePurchase, deletePurchase } from '../controllers/purchases';
 import { getPayments, createPayment } from '../controllers/payments';
 import { getMachines, getMachineBySerial, createMachine } from '../controllers/machines';
-import { getServices, createServiceTask, updateServiceStatus, completeServiceTask, getTechnicianTodayJobs } from '../controllers/services';
+import { getServices, getTodayServicesSummary, createServiceTask, updateServiceStatus, completeServiceTask, assignTechnician, sendTechnicianDispatchWhatsApp, remindAllTodayCustomers, getReminderLogs, sendPaymentReminderWhatsApp, getTechnicianTodayJobs } from '../controllers/services';
+import { getWhatsAppConfigHandler, updateWhatsAppConfigHandler, testWhatsAppConnectionHandler } from '../controllers/whatsappSettings';
 import { getExpenses, createExpense } from '../controllers/expenses';
 import { getDashboardStats, getGSTReport, getStockLedgerReport, getPartyLedgerReport, getProfitAndLossReport } from '../controllers/reports';
 import { globalSearch, createBackup, resetDemoData } from '../controllers/backup';
@@ -115,10 +116,21 @@ router.post('/machines', createMachine);
 
 // Services & Technician Mobile Interface
 router.get('/services', getServices);
+router.get('/services/summary', getTodayServicesSummary);
 router.post('/services', createServiceTask);
+router.post('/services/assign', assignTechnician);
 router.put('/services/:id/status', updateServiceStatus);
 router.put('/services/:id/complete', completeServiceTask);
+router.post('/services/dispatch-whatsapp', sendTechnicianDispatchWhatsApp);
+router.post('/services/remind-today-bulk', remindAllTodayCustomers);
+router.get('/services/reminder-logs', getReminderLogs);
+router.post('/services/payment-reminder-whatsapp', sendPaymentReminderWhatsApp);
 router.get('/services/technician/today', getTechnicianTodayJobs);
+
+// WhatsApp Business API Config
+router.get('/whatsapp/config', getWhatsAppConfigHandler);
+router.put('/whatsapp/config', updateWhatsAppConfigHandler);
+router.post('/whatsapp/test-connection', testWhatsAppConnectionHandler);
 
 // Expenses
 router.get('/expenses', getExpenses);

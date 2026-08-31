@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../api';
-import { Settings as SettingsIcon, Building, Database, Trash2, Shield, Save, Download, Hash, FileText, CheckCircle2 } from 'lucide-react';
+import { Settings as SettingsIcon, Building, Database, Trash2, Shield, Save, Download, Hash, FileText, CheckCircle2, MessageSquare } from 'lucide-react';
+import { WhatsAppSettingsSection } from '../components/WhatsAppSettingsSection';
 
 export const Settings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'terms' | 'numbering'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'terms' | 'numbering' | 'whatsapp'>('profile');
   const [company, setCompany] = useState<any>({});
   const [stockSetting, setStockSetting] = useState('YES');
   const [loading, setLoading] = useState(true);
@@ -294,10 +295,18 @@ export const Settings: React.FC = () => {
           >
             Terms & Conditions Master
           </button>
+          <button
+            onClick={() => setActiveTab('whatsapp')}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'whatsapp' ? 'bg-emerald-950 text-white shadow-sm font-extrabold' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            WhatsApp Business API
+          </button>
         </div>
       </div>
 
-      {activeTab === 'numbering' ? (
+      {activeTab === 'whatsapp' ? (
+        <WhatsAppSettingsSection />
+      ) : activeTab === 'numbering' ? (
         /* INVOICE NUMBERING SETTINGS TAB */
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
           <div className="flex justify-between items-center border-b pb-4">

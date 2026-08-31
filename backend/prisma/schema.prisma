@@ -12,6 +12,7 @@ model User {
   name         String
   username     String   @unique
   email        String?  @unique
+  mobile       String?
   passwordHash String
   role         String   @default("OFFICE") // ADMIN, OFFICE, SERVICE_MANAGER, SERVICE_TECHNICIAN
   active       Boolean  @default(true)
@@ -96,10 +97,15 @@ model Party {
   pan            String?
   openingBalance Float    @default(0)
   creditLimit    Float    @default(0)
-  notes          String?
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  notes                    String?
+  active                   Boolean              @default(true)
+  whatsappServiceReminders Boolean              @default(true)
+  whatsappPaymentReminders Boolean              @default(true)
+  whatsappMarketing        Boolean              @default(true)
+  latitude                 Float?
+  longitude                Float?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
 
   invoices         Invoice[]
   quotations       Quotation[]
@@ -110,6 +116,7 @@ model Party {
   machines         Machine[]
   services         ServiceTask[]
   stockMovements   StockMovement[]
+  reminderLogs     ServiceReminderLog[]
 }
 
 model Category {
@@ -241,6 +248,7 @@ model Invoice {
   items            InvoiceItem[]
   deliveryChallans DeliveryChallan[]
   machines         Machine[]
+  reminderLogs     ServiceReminderLog[]
 }
 
 model InvoiceItem {
@@ -508,6 +516,9 @@ model Machine {
   warrantyStart       DateTime  @default(now())
   warrantyEnd         DateTime
   serviceIntervalDays Int       @default(90)
+  serviceIntervalUnit String    @default("MONTHS") // DAYS, WEEKS, MONTHS, YEARS
+  serviceIntervalValue Int      @default(3)
+  lastServiceDate     DateTime?
   nextServiceDate     DateTime?
   location            String?
   assignedTechnicianId String?
@@ -515,11 +526,12 @@ model Machine {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  party              Party         @relation(fields: [partyId], references: [id])
-  machineItem        Item          @relation("MachineItem", fields: [machineItemId], references: [id])
-  invoice            Invoice?      @relation(fields: [invoiceId], references: [id])
-  assignedTechnician User?         @relation("TechnicianMachines", fields: [assignedTechnicianId], references: [id])
+  party              Party                @relation(fields: [partyId], references: [id])
+  machineItem        Item                 @relation("MachineItem", fields: [machineItemId], references: [id])
+  invoice            Invoice?             @relation(fields: [invoiceId], references: [id])
+  assignedTechnician User?                @relation("TechnicianMachines", fields: [assignedTechnicianId], references: [id])
   services           ServiceTask[]
+  reminderLogs       ServiceReminderLog[]
 }
 
 model ServiceTask {
@@ -528,21 +540,29 @@ model ServiceTask {
   machineId           String
   partyId             String
   serialNumber        String
+  serviceType         String    @default("ROUTINE") // ROUTINE, WARRANTY, BREAKDOWN, COMPLAINT
   serviceDueDate      DateTime
   serviceIntervalDays Int       @default(90)
   assignedTechnicianId String?
-  status              String    @default("SCHEDULED") // SCHEDULED, ASSIGNED, IN_PROGRESS, COMPLETED, RESCHEDULED, CANCELLED, CUSTOMER_UNAVAILABLE
+  status              String    @default("SCHEDULED") // SCHEDULED, ASSIGNED, CONFIRMED, ON_THE_WAY, IN_PROGRESS, COMPLETED, RESCHEDULED, CANCELLED, CUSTOMER_UNAVAILABLE
   workPerformed       String?
   technicianNotes     String?
+  customerFeedback    String?
+  serviceCharge       Float     @default(0)
+  partsTotal          Float     @default(0)
+  grandTotal          Float     @default(0)
+  latitude            Float?
+  longitude           Float?
   photos              String?   // JSON Array string of base64/URL photo strings
   completedAt         DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  machine            Machine       @relation(fields: [machineId], references: [id])
-  party              Party         @relation(fields: [partyId], references: [id])
-  assignedTechnician User?         @relation("TechnicianServices", fields: [assignedTechnicianId], references: [id])
+  machine            Machine              @relation(fields: [machineId], references: [id])
+  party              Party                @relation(fields: [partyId], references: [id])
+  assignedTechnician User?                @relation("TechnicianServices", fields: [assignedTechnicianId], references: [id])
   parts              ServicePart[]
+  reminderLogs       ServiceReminderLog[]
 }
 
 model ServicePart {
@@ -555,6 +575,31 @@ model ServicePart {
 
   serviceTask ServiceTask @relation(fields: [serviceTaskId], references: [id], onDelete: Cascade)
   item        Item        @relation(fields: [itemId], references: [id])
+}
+
+model ServiceReminderLog {
+  id                 String    @id @default(uuid())
+  serviceTaskId      String?
+  invoiceId          String?
+  partyId            String
+  machineId          String?
+  reminderType       String    // SERVICE_DUE_TODAY, SERVICE_UPCOMING, SERVICE_OVERDUE, PAYMENT_DUE, PAYMENT_OVERDUE
+  recipientPhone     String
+  recipientName      String
+  scheduledDate      DateTime
+  sentAt             DateTime?
+  status             String    @default("PENDING") // PENDING, SENT, DELIVERED, READ, FAILED, OPTED_OUT
+  templateName       String?
+  whatsappMessageId  String?
+  messageText        String
+  failureReason      String?
+  isAutomatic        Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+
+  serviceTask ServiceTask? @relation(fields: [serviceTaskId], references: [id], onDelete: SetNull)
+  invoice     Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  party       Party        @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  machine     Machine?     @relation(fields: [machineId], references: [id], onDelete: SetNull)
 }
 
 model Expense {
