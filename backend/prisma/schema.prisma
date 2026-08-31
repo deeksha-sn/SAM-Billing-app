@@ -212,39 +212,45 @@ model BOMItem {
 }
 
 model Invoice {
-  id                String   @id @default(uuid())
-  invoiceNumber     String   @unique
+  id                String    @id @default(uuid())
+  invoiceNumber     String    @unique
   financialYear     String
   invoiceDate       DateTime
   partyId           String
   billingAddress    String?
   deliveryAddress   String?
-  customerStateCode  String   @default("29")
-  isInterState      Boolean  @default(false)
+  deliveryLocation  String?
+  customerStateCode String    @default("29")
+  isInterState      Boolean   @default(false)
   ewayBillNo        String?
   placeOfSupply     String?
   poNumber          String?
   poDate            DateTime?
+  transportName     String?
   termsTemplateId   String?
-  termsSnapshot     String?  // JSON string storing array of terms e.g. ["1. Company...", "2. No..."]
-  taxableAmount     Float    @default(0)
-  cgstAmount        Float    @default(0)
-  sgstAmount        Float    @default(0)
-  igstAmount        Float    @default(0)
-  roundOff          Float    @default(0)
-  grandTotal        Float    @default(0)
-  amountPaid        Float    @default(0)
-  balanceDue        Float    @default(0)
-  paymentMode       String   @default("Credit") // Cash, UPI, Bank Transfer, Card, Credit, Other
-  status            String   @default("CONFIRMED") // DRAFT, CONFIRMED, PAID, PARTIALLY_PAID, UNPAID, CANCELLED
+  termsSnapshot     String?   // JSON string storing array of terms e.g. ["1. Company...", "2. No..."]
+  taxableAmount     Float     @default(0)
+  cgstAmount        Float     @default(0)
+  sgstAmount        Float     @default(0)
+  igstAmount        Float     @default(0)
+  roundOffEnabled   Boolean   @default(true)
+  roundOff          Float     @default(0)
+  grandTotal        Float     @default(0)
+  amountPaid        Float     @default(0)
+  balanceDue        Float     @default(0)
+  paymentMode       String    @default("Credit") // Cash, UPI, Bank Transfer, Card, Credit, Other
+  paymentTerms      String?   // Due on Receipt, 7 Days, 15 Days, 30 Days, 45 Days, 60 Days, Custom
+  dueDate           DateTime?
+  taxTreatment      String    @default("TAXABLE") // TAXABLE, EXEMPT, NIL
+  status            String    @default("CONFIRMED") // DRAFT, CONFIRMED, PAID, PARTIALLY_PAID, UNPAID, CANCELLED
   notes             String?
   createdById       String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  party            Party             @relation(fields: [partyId], references: [id])
-  createdBy        User?             @relation(fields: [createdById], references: [id])
-  termsTemplate    TermsTemplate?    @relation(fields: [termsTemplateId], references: [id])
+  party            Party              @relation(fields: [partyId], references: [id])
+  createdBy        User?              @relation(fields: [createdById], references: [id])
+  termsTemplate    TermsTemplate?     @relation(fields: [termsTemplateId], references: [id])
   items            InvoiceItem[]
   deliveryChallans DeliveryChallan[]
   machines         Machine[]
@@ -252,68 +258,78 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id             String @id @default(uuid())
-  invoiceId      String
-  itemId         String
-  itemName       String
-  hsnSac         String
-  unit           String
-  quantity       Float
-  rate           Float
-  discountPercent Float  @default(0)
-  discountAmount  Float  @default(0)
-  taxableValue   Float
-  gstRate        Float
-  cgstAmount     Float  @default(0)
-  sgstAmount     Float  @default(0)
-  igstAmount     Float  @default(0)
-  totalAmount    Float
+  id              String  @id @default(uuid())
+  invoiceId       String
+  itemId          String
+  itemName        String
+  description     String?
+  hsnSac          String
+  unit            String
+  quantity        Float
+  freeQuantity    Float   @default(0)
+  rate            Float
+  discountPercent Float   @default(0)
+  discountAmount  Float   @default(0)
+  taxableValue    Float
+  gstRate         Float
+  isExempt        Boolean @default(false)
+  cgstAmount      Float   @default(0)
+  sgstAmount      Float   @default(0)
+  igstAmount      Float   @default(0)
+  totalAmount     Float
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   item    Item    @relation(fields: [itemId], references: [id])
 }
 
 model Quotation {
-  id               String   @id @default(uuid())
-  quotationNumber  String   @unique
-  financialYear    String
-  quotationDate    DateTime
-  validityDate     DateTime?
-  partyId          String
-  customerStateCode String  @default("29")
-  isInterState     Boolean  @default(false)
-  taxableAmount    Float    @default(0)
-  cgstAmount       Float    @default(0)
-  sgstAmount       Float    @default(0)
-  igstAmount       Float    @default(0)
-  roundOff         Float    @default(0)
-  grandTotal       Float    @default(0)
-  terms            String?
-  notes            String?
-  status           String   @default("ACTIVE") // ACTIVE, CONVERTED, EXPIRED, CANCELLED
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                String    @id @default(uuid())
+  quotationNumber   String    @unique
+  financialYear     String
+  quotationDate     DateTime
+  validityDate      DateTime?
+  partyId           String
+  customerStateCode String    @default("29")
+  isInterState      Boolean   @default(false)
+  transportName     String?
+  deliveryLocation  String?
+  taxableAmount     Float     @default(0)
+  cgstAmount        Float     @default(0)
+  sgstAmount        Float     @default(0)
+  igstAmount        Float     @default(0)
+  roundOffEnabled   Boolean   @default(true)
+  roundOff          Float     @default(0)
+  grandTotal        Float     @default(0)
+  paymentTerms      String?
+  terms             String?
+  notes             String?
+  status            String    @default("ACTIVE") // ACTIVE, CONVERTED, EXPIRED, CANCELLED
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   party Party           @relation(fields: [partyId], references: [id])
   items QuotationItem[]
 }
 
 model QuotationItem {
-  id              String @id @default(uuid())
+  id              String  @id @default(uuid())
   quotationId     String
   itemId          String
   itemName        String
+  description     String?
   hsnSac          String
   unit            String
   quantity        Float
+  freeQuantity    Float   @default(0)
   rate            Float
-  discountPercent Float  @default(0)
-  discountAmount  Float  @default(0)
+  discountPercent Float   @default(0)
+  discountAmount  Float   @default(0)
   taxableValue    Float
   gstRate         Float
-  cgstAmount      Float  @default(0)
-  sgstAmount      Float  @default(0)
-  igstAmount      Float  @default(0)
+  isExempt        Boolean @default(false)
+  cgstAmount      Float   @default(0)
+  sgstAmount      Float   @default(0)
+  igstAmount      Float   @default(0)
   totalAmount     Float
 
   quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
@@ -321,23 +337,23 @@ model QuotationItem {
 }
 
 model ProformaInvoice {
-  id               String   @id @default(uuid())
-  proformaNumber   String   @unique
-  financialYear    String
-  proformaDate     DateTime
-  partyId          String
-  customerStateCode String  @default("29")
-  isInterState     Boolean  @default(false)
-  taxableAmount    Float    @default(0)
-  cgstAmount       Float    @default(0)
-  sgstAmount       Float    @default(0)
-  igstAmount       Float    @default(0)
-  roundOff         Float    @default(0)
-  grandTotal       Float    @default(0)
-  status           String   @default("ACTIVE") // ACTIVE, CONVERTED, CANCELLED
-  notes            String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                String   @id @default(uuid())
+  proformaNumber    String   @unique
+  financialYear     String
+  proformaDate      DateTime
+  partyId           String
+  customerStateCode String   @default("29")
+  isInterState      Boolean  @default(false)
+  taxableAmount     Float    @default(0)
+  cgstAmount        Float    @default(0)
+  sgstAmount        Float    @default(0)
+  igstAmount        Float    @default(0)
+  roundOff          Float    @default(0)
+  grandTotal        Float    @default(0)
+  status            String   @default("ACTIVE") // ACTIVE, CONVERTED, CANCELLED
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   party Party          @relation(fields: [partyId], references: [id])
   items ProformaItem[]
@@ -363,24 +379,28 @@ model ProformaItem {
 }
 
 model DeliveryChallan {
-  id            String   @id @default(uuid())
-  challanNumber String   @unique
-  financialYear String
-  challanDate   DateTime
-  partyId       String
-  deliveryAddress String?
-  contactNumber String?
-  vehicleNumber String?
-  transporter   String?
-  reason        String   @default("Delivery against sale") // Delivery against sale, Service, Repair, Replacement, Demonstration, Job work, Other
-  refOrderNo    String?
-  affectsStock  Boolean  @default(true) // Configurable
-  stockDeducted Boolean  @default(false)
-  status        String   @default("CONFIRMED") // CONFIRMED, CONVERTED_TO_INVOICE, CANCELLED
-  notes         String?
-  invoiceId     String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String   @id @default(uuid())
+  challanNumber    String   @unique
+  financialYear    String
+  challanDate      DateTime
+  partyId          String
+  deliveryAddress  String?
+  deliveryLocation String?
+  contactNumber    String?
+  vehicleNumber    String?
+  transporter      String?
+  transportName    String?
+  reason           String   @default("Delivery against sale") // Delivery against sale, Service, Repair, Replacement, Demonstration, Job work, Other
+  refOrderNo       String?
+  poNumber         String?
+  poDate           DateTime?
+  affectsStock     Boolean  @default(true) // Configurable
+  stockDeducted    Boolean  @default(false)
+  status           String   @default("CONFIRMED") // CONFIRMED, CONVERTED_TO_INVOICE, CANCELLED
+  notes            String?
+  invoiceId        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   party   Party                 @relation(fields: [partyId], references: [id])
   invoice Invoice?              @relation(fields: [invoiceId], references: [id])
@@ -388,58 +408,74 @@ model DeliveryChallan {
 }
 
 model DeliveryChallanItem {
-  id                String @id @default(uuid())
+  id                String  @id @default(uuid())
   deliveryChallanId String
   itemId            String
   itemName          String
+  description       String?
   unit              String
   quantity          Float
+  freeQuantity      Float   @default(0)
 
   deliveryChallan DeliveryChallan @relation(fields: [deliveryChallanId], references: [id], onDelete: Cascade)
   item            Item            @relation(fields: [itemId], references: [id])
 }
 
 model PurchaseInvoice {
-  id                 String   @id @default(uuid())
-  purchaseNumber     String   @unique
+  id                 String    @id @default(uuid())
+  purchaseNumber     String    @unique
   supplierInvoiceNo  String?
   financialYear      String
   purchaseDate       DateTime
   partyId            String
-  supplierStateCode  String   @default("29")
-  isInterState       Boolean  @default(false)
-  taxableAmount      Float    @default(0)
-  cgstAmount         Float    @default(0)
-  sgstAmount         Float    @default(0)
-  igstAmount         Float    @default(0)
-  roundOff           Float    @default(0)
-  grandTotal         Float    @default(0)
-  amountPaid         Float    @default(0)
-  balanceDue         Float    @default(0)
-  status             String   @default("CONFIRMED") // CONFIRMED, PAID, PARTIALLY_PAID, UNPAID, CANCELLED
+  deliveryLocation   String?
+  supplierStateCode  String    @default("29")
+  isInterState       Boolean   @default(false)
+  ewayBillNo         String?
+  poNumber           String?
+  poDate             DateTime?
+  transportName      String?
+  taxableAmount      Float     @default(0)
+  cgstAmount         Float     @default(0)
+  sgstAmount         Float     @default(0)
+  igstAmount         Float     @default(0)
+  roundOffEnabled    Boolean   @default(true)
+  roundOff           Float     @default(0)
+  grandTotal         Float     @default(0)
+  amountPaid         Float     @default(0)
+  balanceDue         Float     @default(0)
+  paymentMode        String    @default("Credit")
+  paymentTerms       String?
+  dueDate            DateTime?
+  taxTreatment       String    @default("TAXABLE")
+  status             String    @default("CONFIRMED") // CONFIRMED, PAID, PARTIALLY_PAID, UNPAID, CANCELLED
   notes              String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   party Party          @relation(fields: [partyId], references: [id])
   items PurchaseItem[]
 }
 
 model PurchaseItem {
-  id                String @id @default(uuid())
+  id                String  @id @default(uuid())
   purchaseInvoiceId String
   itemId            String
   itemName          String
+  description       String?
   hsnSac            String
   unit              String
   quantity          Float
+  freeQuantity      Float   @default(0)
   rate              Float
-  discountPercent   Float  @default(0)
+  discountPercent   Float   @default(0)
+  discountAmount    Float   @default(0)
   taxableValue      Float
   gstRate           Float
-  cgstAmount        Float  @default(0)
-  sgstAmount        Float  @default(0)
-  igstAmount        Float  @default(0)
+  isExempt          Boolean @default(false)
+  cgstAmount        Float   @default(0)
+  sgstAmount        Float   @default(0)
+  igstAmount        Float   @default(0)
   totalAmount       Float
 
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)

@@ -6,8 +6,8 @@ import { Layers, Plus, Printer, Eye, Edit, Share2, Search, CheckCircle2, AlertCi
 import { PrintQuotationModal } from '../components/PrintQuotationModal';
 import { ViewQuotationModal } from '../components/ViewQuotationModal';
 import { ShareQuotationModal } from '../components/ShareQuotationModal';
-import { QuotationEditorModal } from '../components/QuotationEditorModal';
 import { DeleteQuotationModal } from '../components/DeleteQuotationModal';
+import { FullScreenBillingEngine } from '../components/FullScreenBillingEngine';
 
 export const Quotations: React.FC = () => {
   const { user } = useAuth();
@@ -27,6 +27,26 @@ export const Quotations: React.FC = () => {
   const [sharingQuotation, setSharingQuotation] = useState<any>(null);
   const [deletingQuotation, setDeletingQuotation] = useState<any>(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  if (showEditorModal) {
+    return (
+      <FullScreenBillingEngine
+        docType="QUOTATION"
+        editingDocId={editingQuotation?.id}
+        onBack={() => {
+          setShowEditorModal(false);
+          setEditingQuotation(null);
+          setSearchParams({});
+        }}
+        onSaved={(saved) => {
+          setShowEditorModal(false);
+          setEditingQuotation(null);
+          setSearchParams({});
+          loadQuotations();
+        }}
+      />
+    );
+  }
 
   useEffect(() => {
     loadQuotations();
@@ -319,28 +339,7 @@ export const Quotations: React.FC = () => {
         )}
       </div>
 
-      {/* Editor Modal */}
-      {showEditorModal && (
-        <QuotationEditorModal
-          quotation={editingQuotation}
-          onClose={() => {
-            setShowEditorModal(false);
-            setEditingQuotation(null);
-            if (searchParams.get('create')) {
-              setSearchParams({});
-            }
-          }}
-          onSaved={(savedQuo) => {
-            setShowEditorModal(false);
-            setEditingQuotation(null);
-            if (searchParams.get('create')) {
-              setSearchParams({});
-            }
-            loadQuotations();
-            setViewingQuotation(savedQuo);
-          }}
-        />
-      )}
+
 
       {/* View Modal */}
       {viewingQuotation && (

@@ -6,7 +6,7 @@ import { FileText, Plus, Printer, Eye, Edit, Share2, Ban, Search, CheckCircle2, 
 import { PrintInvoiceModal } from '../components/PrintInvoiceModal';
 import { ViewInvoiceModal } from '../components/ViewInvoiceModal';
 import { ShareInvoiceModal } from '../components/ShareInvoiceModal';
-import { InvoiceEditorModal } from '../components/InvoiceEditorModal';
+import { FullScreenBillingEngine } from '../components/FullScreenBillingEngine';
 
 export const SalesInvoices: React.FC = () => {
   const { user } = useAuth();
@@ -22,6 +22,26 @@ export const SalesInvoices: React.FC = () => {
   const [viewingInvoice, setViewingInvoice] = useState<any>(null);
   const [printingInvoice, setPrintingInvoice] = useState<any>(null);
   const [sharingInvoice, setSharingInvoice] = useState<any>(null);
+
+  if (showEditorModal) {
+    return (
+      <FullScreenBillingEngine
+        docType="INVOICE"
+        editingDocId={editingInvoice?.id}
+        onBack={() => {
+          setShowEditorModal(false);
+          setEditingInvoice(null);
+          setSearchParams({});
+        }}
+        onSaved={(saved) => {
+          setShowEditorModal(false);
+          setEditingInvoice(null);
+          setSearchParams({});
+          loadInvoices();
+        }}
+      />
+    );
+  }
 
   useEffect(() => {
     loadInvoices();
@@ -296,23 +316,7 @@ export const SalesInvoices: React.FC = () => {
         )}
       </div>
 
-      {/* Editor Modal (Create / Edit) */}
-      {showEditorModal && (
-        <InvoiceEditorModal
-          invoice={editingInvoice}
-          company={company}
-          onClose={() => {
-            setShowEditorModal(false);
-            setEditingInvoice(null);
-          }}
-          onSaved={(savedInv) => {
-            setShowEditorModal(false);
-            setEditingInvoice(null);
-            loadInvoices();
-            setViewingInvoice(savedInv);
-          }}
-        />
-      )}
+
 
       {/* View Modal */}
       {viewingInvoice && (

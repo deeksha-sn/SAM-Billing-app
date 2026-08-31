@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../api';
 import { Truck, Plus, Eye, Edit, Trash2, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { ChallanEditorModal } from '../components/ChallanEditorModal';
 import { ViewChallanModal } from '../components/ViewChallanModal';
 import { DeleteChallanModal } from '../components/DeleteChallanModal';
+import { FullScreenBillingEngine } from '../components/FullScreenBillingEngine';
 
 export const DeliveryChallans: React.FC = () => {
   const navigate = useNavigate();
@@ -18,6 +18,20 @@ export const DeliveryChallans: React.FC = () => {
   const [viewingChallan, setViewingChallan] = useState<any | null>(null);
   const [deletingChallan, setDeletingChallan] = useState<any | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  if (editorModalChallan !== null) {
+    return (
+      <FullScreenBillingEngine
+        docType="DELIVERY_CHALLAN"
+        editingDocId={editorModalChallan?.id}
+        onBack={() => setEditorModalChallan(null)}
+        onSaved={(saved) => {
+          setEditorModalChallan(null);
+          loadChallans();
+        }}
+      />
+    );
+  }
 
   useEffect(() => {
     loadChallans();
@@ -182,14 +196,7 @@ export const DeliveryChallans: React.FC = () => {
         </div>
       </div>
 
-      {/* Editor Modal */}
-      {editorModalChallan && (
-        <ChallanEditorModal
-          challan={editorModalChallan.id ? editorModalChallan : undefined}
-          onSaved={handleSaved}
-          onClose={() => setEditorModalChallan(null)}
-        />
-      )}
+
 
       {/* View Modal */}
       {viewingChallan && (

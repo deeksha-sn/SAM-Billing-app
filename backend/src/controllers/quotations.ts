@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../db';
 import { AuthRequest } from '../middleware/auth';
 import { generateDocumentNumber } from '../utils/numbering';
-import { calculateGST, isInterStateTransaction } from '../utils/gst';
+import { calculateItemGst, isInterStateTransaction } from '../utils/gstHelper';
 import { applyInvoiceStockDeduction } from './sales';
 
 export async function getQuotations(req: AuthRequest, res: Response) {
@@ -54,6 +54,10 @@ export async function createQuotation(req: AuthRequest, res: Response) {
       validityDate,
       items,
       notes,
+      transportName,
+      deliveryLocation,
+      paymentTerms,
+      roundOffEnabled,
       termsTemplateId,
       termsSnapshot,
       status,
@@ -72,7 +76,7 @@ export async function createQuotation(req: AuthRequest, res: Response) {
 
     const company = await prisma.companyProfile.findUnique({ where: { id: 'default' } });
     const companyStateCode = company?.stateCode || '29';
-    const isInterState = isInterStateTransaction(companyStateCode, party.stateCode);
+    const isInterState = isInterStateTransaction(party.stateCode, party.state, companyStateCode);
 
     let rawTotalTaxable = 0;
     let rawTotalCgst = 0;
@@ -81,12 +85,24 @@ export async function createQuotation(req: AuthRequest, res: Response) {
     let rawGrandTotal = 0;
 
     const processedItems = items.map((line: any) => {
-      const qty = Number(line.quantity) || 1;
-      const rate = Number(line.rate) || 0;
-      const discountPercent = Number(line.discountPercent) || 0;
-      const gstRate = Number(line.gstRate) || 18;
+      const qty = Math.max(0, Number(line.quantity) || 1);
+      const freeQty = Math.max(0, Number(line.freeQuantity) || 0);
+      const rate = Math.max(0, Number(line.rate) || 0);
+      const discountPercent = Math.max(0, Number(line.discountPercent) || 0);
+      const discountAmount = Math.max(0, Number(line.discountAmount) || 0);
+      const isExempt = line.isExempt || line.gstRate === 'EXEMPT';
+      const gstRateVal = isExempt ? 0 : Number(line.gstRate) || 0;
 
-      const calc = calculateGST(qty, rate, discountPercent, gstRate, isInterState);
+      const calc = calculateItemGst({
+        quantity: qty,
+        freeQuantity: freeQty,
+        rate: rate,
+        discountPercent: discountPercent,
+        discountAmount: discountAmount,
+        gstRate: gstRateVal,
+        isExempt: isExempt,
+        isInterState: isInterState,
+      });
 
       rawTotalTaxable += calc.taxableValue;
       rawTotalCgst += calc.cgstAmount;
@@ -97,14 +113,17 @@ export async function createQuotation(req: AuthRequest, res: Response) {
       return {
         itemId: line.itemId,
         itemName: line.itemName || 'Item',
+        description: line.description || null,
         hsnSac: line.hsnSac || '8436',
         unit: line.unit || 'Nos',
         quantity: qty,
+        freeQuantity: freeQty,
         rate: rate,
         discountPercent: discountPercent,
-        discountAmount: Number(((qty * rate * discountPercent) / 100).toFixed(2)),
+        discountAmount: calc.taxableValue < (qty * rate) ? (qty * rate - calc.taxableValue) : 0,
         taxableValue: calc.taxableValue,
-        gstRate: gstRate,
+        gstRate: gstRateVal,
+        isExempt: calc.isExempt,
         cgstAmount: calc.cgstAmount,
         sgstAmount: calc.sgstAmount,
         igstAmount: calc.igstAmount,
@@ -112,48 +131,45 @@ export async function createQuotation(req: AuthRequest, res: Response) {
       };
     });
 
-    const grandTotal = Math.round(rawGrandTotal);
-    const roundOff = Number((grandTotal - rawGrandTotal).toFixed(2));
-    const totalTaxable = Number(rawTotalTaxable.toFixed(2));
-    const totalCgst = Number(rawTotalCgst.toFixed(2));
-    const totalSgst = Number(rawTotalSgst.toFixed(2));
-    const totalIgst = Number(rawTotalIgst.toFixed(2));
+    const isRoundOffOn = roundOffEnabled !== false;
+    const grandTotal = isRoundOffOn ? Math.round(rawGrandTotal) : Number(rawGrandTotal.toFixed(2));
+    const roundOff = isRoundOffOn ? Number((grandTotal - rawGrandTotal).toFixed(2)) : 0;
+    const totalTaxable = rawTotalTaxable;
+    const totalCgst = rawTotalCgst;
+    const totalSgst = rawTotalSgst;
+    const totalIgst = rawTotalIgst;
 
-    const formattedTermsSnapshot = termsSnapshot !== undefined
-      ? (Array.isArray(termsSnapshot)
-          ? JSON.stringify(termsSnapshot.filter((t: any) => typeof t === 'string' && t.trim().length > 0))
-          : typeof termsSnapshot === 'string'
-          ? termsSnapshot
-          : null)
+    const formattedTermsSnapshot = Array.isArray(termsSnapshot)
+      ? JSON.stringify(termsSnapshot.filter((t: any) => typeof t === 'string' && t.trim().length > 0))
+      : typeof termsSnapshot === 'string'
+      ? termsSnapshot
       : null;
 
-    const qDate = quotationDate ? new Date(quotationDate) : new Date();
-    let vDate: Date | null = null;
-    if (validityDate) {
-      vDate = new Date(validityDate);
-    } else {
-      vDate = new Date(qDate);
-      vDate.setDate(vDate.getDate() + 30); // 30 days validity default
-    }
+    const quoDate = quotationDate ? new Date(quotationDate) : new Date();
 
     const quotation = await prisma.$transaction(async (tx) => {
-      const { docNumber, fy } = await generateDocumentNumber('QUOTATION', qDate, tx);
+      const { docNumber, fy } = await generateDocumentNumber('QUOTATION', quoDate, tx);
 
       const created = await tx.quotation.create({
         data: {
           quotationNumber: docNumber,
           financialYear: fy,
-          quotationDate: qDate,
-          validityDate: vDate,
+          quotationDate: quoDate,
+          validityDate: validityDate ? new Date(validityDate) : null,
           partyId: party.id,
-          customerStateCode: party.stateCode,
+          customerStateCode: party.stateCode || '29',
           isInterState: isInterState,
+          transportName: transportName ? String(transportName).trim() : null,
+          deliveryLocation: deliveryLocation ? String(deliveryLocation).trim() : null,
           taxableAmount: totalTaxable,
           cgstAmount: totalCgst,
           sgstAmount: totalSgst,
           igstAmount: totalIgst,
+          roundOffEnabled: isRoundOffOn,
           roundOff: roundOff,
           grandTotal: grandTotal,
+          paymentTerms: paymentTerms || null,
+          terms: formattedTermsSnapshot,
           notes: notes || null,
           status: status || 'ACTIVE',
           items: {
@@ -162,7 +178,7 @@ export async function createQuotation(req: AuthRequest, res: Response) {
         },
         include: {
           party: true,
-          items: true,
+          items: { include: { item: true } },
         },
       });
 
@@ -245,12 +261,24 @@ export async function updateQuotation(req: AuthRequest, res: Response) {
         let rawGrandTotal = 0;
 
         processedItems = items.map((line: any) => {
-          const qty = Number(line.quantity) || 1;
-          const rate = Number(line.rate) || 0;
-          const discountPercent = Number(line.discountPercent) || 0;
-          const gstRate = Number(line.gstRate) || 18;
+          const qty = Math.max(0, Number(line.quantity) || 1);
+          const freeQty = Math.max(0, Number(line.freeQuantity) || 0);
+          const rate = Math.max(0, Number(line.rate) || 0);
+          const discountPercent = Math.max(0, Number(line.discountPercent) || 0);
+          const discountAmount = Math.max(0, Number(line.discountAmount) || 0);
+          const isExempt = line.isExempt || line.gstRate === 'EXEMPT';
+          const gstRateVal = isExempt ? 0 : Number(line.gstRate) || 0;
 
-          const calc = calculateGST(qty, rate, discountPercent, gstRate, isInterState);
+          const calc = calculateItemGst({
+            quantity: qty,
+            freeQuantity: freeQty,
+            rate: rate,
+            discountPercent: discountPercent,
+            discountAmount: discountAmount,
+            gstRate: gstRateVal,
+            isExempt: isExempt,
+            isInterState: isInterState,
+          });
 
           rawTotalTaxable += calc.taxableValue;
           rawTotalCgst += calc.cgstAmount;
@@ -261,14 +289,17 @@ export async function updateQuotation(req: AuthRequest, res: Response) {
           return {
             itemId: line.itemId,
             itemName: line.itemName || 'Item',
+            description: line.description || null,
             hsnSac: line.hsnSac || '8436',
             unit: line.unit || 'Nos',
             quantity: qty,
+            freeQuantity: freeQty,
             rate: rate,
             discountPercent: discountPercent,
-            discountAmount: Number(((qty * rate * discountPercent) / 100).toFixed(2)),
+            discountAmount: calc.taxableValue < (qty * rate) ? (qty * rate - calc.taxableValue) : 0,
             taxableValue: calc.taxableValue,
-            gstRate: gstRate,
+            gstRate: gstRateVal,
+            isExempt: calc.isExempt,
             cgstAmount: calc.cgstAmount,
             sgstAmount: calc.sgstAmount,
             igstAmount: calc.igstAmount,

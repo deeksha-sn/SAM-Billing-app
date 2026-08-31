@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../db';
 import { AuthRequest } from '../middleware/auth';
 import { generateDocumentNumber } from '../utils/numbering';
-import { calculateGST, isInterStateTransaction } from '../utils/gst';
+import { calculateItemGst, isInterStateTransaction } from '../utils/gstHelper';
 
 // Helper function to process BOM & Stock Deduction in a transaction
 export async function applyInvoiceStockDeduction(tx: any, invoiceId: string, invoiceNumber: string, partyId: string, userId?: string) {
@@ -218,6 +218,8 @@ export async function createInvoice(req: AuthRequest, res: Response) {
       invoiceDate,
       items,
       paymentMode,
+      paymentTerms,
+      dueDate,
       amountPaid,
       status,
       notes,
@@ -227,6 +229,9 @@ export async function createInvoice(req: AuthRequest, res: Response) {
       placeOfSupply,
       poNumber,
       poDate,
+      transportName,
+      deliveryLocation,
+      roundOffEnabled,
       termsTemplateId,
       termsSnapshot,
     } = req.body;
@@ -240,7 +245,7 @@ export async function createInvoice(req: AuthRequest, res: Response) {
 
     const company = await prisma.companyProfile.findUnique({ where: { id: 'default' } });
     const companyStateCode = company?.stateCode || '29';
-    const isInterState = isInterStateTransaction(companyStateCode, party.stateCode);
+    const isInterState = isInterStateTransaction(party.stateCode, party.state, companyStateCode);
 
     // Calculate item tax details
     let totalTaxable = 0;
@@ -250,12 +255,24 @@ export async function createInvoice(req: AuthRequest, res: Response) {
     let rawGrandTotal = 0;
 
     const processedItems = items.map((line: any) => {
-      const qty = Number(line.quantity) || 1;
-      const rate = Number(line.rate) || 0;
-      const discountPercent = Number(line.discountPercent) || 0;
-      const gstRate = Number(line.gstRate) || 18;
+      const qty = Math.max(0, Number(line.quantity) || 1);
+      const freeQty = Math.max(0, Number(line.freeQuantity) || 0);
+      const rate = Math.max(0, Number(line.rate) || 0);
+      const discountPercent = Math.max(0, Number(line.discountPercent) || 0);
+      const discountAmount = Math.max(0, Number(line.discountAmount) || 0);
+      const isExempt = line.isExempt || line.gstRate === 'EXEMPT';
+      const gstRateVal = isExempt ? 0 : Number(line.gstRate) || 0;
 
-      const calc = calculateGST(qty, rate, discountPercent, gstRate, isInterState);
+      const calc = calculateItemGst({
+        quantity: qty,
+        freeQuantity: freeQty,
+        rate: rate,
+        discountPercent: discountPercent,
+        discountAmount: discountAmount,
+        gstRate: gstRateVal,
+        isExempt: isExempt,
+        isInterState: isInterState,
+      });
 
       totalTaxable += calc.taxableValue;
       totalCgst += calc.cgstAmount;
@@ -266,26 +283,30 @@ export async function createInvoice(req: AuthRequest, res: Response) {
       return {
         itemId: line.itemId,
         itemName: line.itemName || 'Item',
+        description: line.description || null,
         hsnSac: line.hsnSac || '8436',
         unit: line.unit || 'Nos',
         quantity: qty,
+        freeQuantity: freeQty,
         rate: rate,
         discountPercent: discountPercent,
-        discountAmount: Number(((qty * rate * discountPercent) / 100).toFixed(2)),
+        discountAmount: calc.taxableValue < (qty * rate) ? (qty * rate - calc.taxableValue) : 0,
         taxableValue: calc.taxableValue,
-        gstRate: gstRate,
+        gstRate: gstRateVal,
+        isExempt: calc.isExempt,
         cgstAmount: calc.cgstAmount,
         sgstAmount: calc.sgstAmount,
         igstAmount: calc.igstAmount,
         totalAmount: calc.totalAmount,
-        serialNumber: line.serialNumber, // Optional machine serial number
+        serialNumber: line.serialNumber || null,
       };
     });
 
-    const grandTotal = Math.round(rawGrandTotal);
-    const roundOff = Number((grandTotal - rawGrandTotal).toFixed(2));
+    const isRoundOffOn = roundOffEnabled !== false;
+    const grandTotal = isRoundOffOn ? Math.round(rawGrandTotal) : Number(rawGrandTotal.toFixed(2));
+    const roundOff = isRoundOffOn ? Number((grandTotal - rawGrandTotal).toFixed(2)) : 0;
     const initialPaid = Number(amountPaid) || 0;
-    const balanceDue = grandTotal - initialPaid;
+    const balanceDue = Math.max(0, grandTotal - initialPaid);
 
     let invoiceStatus = status || 'CONFIRMED';
     if (invoiceStatus === 'CONFIRMED') {
@@ -300,41 +321,53 @@ export async function createInvoice(req: AuthRequest, res: Response) {
       ? termsSnapshot
       : null;
 
+    const invDate = invoiceDate ? new Date(invoiceDate) : new Date();
+
     // Execute atomic transaction for Invoice + Stock Deduction + Ledger
     const invoice = await prisma.$transaction(async (tx) => {
-      const { docNumber, fy } = await generateDocumentNumber('INVOICE', 'INV', tx);
+      const { docNumber, fy } = await generateDocumentNumber('INVOICE', invDate, tx);
 
       const createdInvoice = await tx.invoice.create({
         data: {
           invoiceNumber: docNumber,
           financialYear: fy,
-          invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
+          invoiceDate: invDate,
           partyId: party.id,
           billingAddress: party.address || party.village || '',
-          deliveryAddress: party.address || party.village || '',
-          customerStateCode: party.stateCode,
+          deliveryAddress: deliveryLocation || party.address || party.village || '',
+          deliveryLocation: deliveryLocation || null,
+          customerStateCode: party.stateCode || '29',
           isInterState: isInterState,
           ewayBillNo: ewayBillNo ? String(ewayBillNo).trim() : null,
           placeOfSupply: placeOfSupply ? String(placeOfSupply).trim() : `${party.stateCode}-${party.state}`,
           poNumber: poNumber ? String(poNumber).trim() : null,
           poDate: poDate ? new Date(poDate) : null,
-          termsTemplateId: termsTemplateId ? String(termsTemplateId) : null,
+          transportName: transportName ? String(transportName).trim() : null,
+          termsTemplateId: termsTemplateId || null,
           termsSnapshot: formattedTermsSnapshot,
-          taxableAmount: Number(totalTaxable.toFixed(2)),
-          cgstAmount: Number(totalCgst.toFixed(2)),
-          sgstAmount: Number(totalSgst.toFixed(2)),
-          igstAmount: Number(totalIgst.toFixed(2)),
+          taxableAmount: totalTaxable,
+          cgstAmount: totalCgst,
+          sgstAmount: totalSgst,
+          igstAmount: totalIgst,
+          roundOffEnabled: isRoundOffOn,
           roundOff: roundOff,
           grandTotal: grandTotal,
           amountPaid: initialPaid,
           balanceDue: balanceDue,
           paymentMode: paymentMode || 'Credit',
+          paymentTerms: paymentTerms || null,
+          dueDate: dueDate ? new Date(dueDate) : null,
           status: invoiceStatus,
-          notes: notes,
-          createdById: req.user?.id,
+          notes: notes || null,
+          createdById: req.user?.id || null,
           items: {
-            create: processedItems.map(({ serialNumber, ...rest }) => rest),
+            create: processedItems,
           },
+        },
+        include: {
+          party: true,
+          items: { include: { item: true } },
+          termsTemplate: true,
         },
       });
 
@@ -511,12 +544,24 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
         let rawGrandTotal = 0;
 
         processedItems = items.map((line: any) => {
-          const qty = Number(line.quantity) || 1;
-          const rate = Number(line.rate) || 0;
-          const discountPercent = Number(line.discountPercent) || 0;
-          const gstRate = Number(line.gstRate) || 18;
+          const qty = Math.max(0, Number(line.quantity) || 1);
+          const freeQty = Math.max(0, Number(line.freeQuantity) || 0);
+          const rate = Math.max(0, Number(line.rate) || 0);
+          const discountPercent = Math.max(0, Number(line.discountPercent) || 0);
+          const discountAmount = Math.max(0, Number(line.discountAmount) || 0);
+          const isExempt = line.isExempt || line.gstRate === 'EXEMPT';
+          const gstRateVal = isExempt ? 0 : Number(line.gstRate) || 0;
 
-          const calc = calculateGST(qty, rate, discountPercent, gstRate, isInterState);
+          const calc = calculateItemGst({
+            quantity: qty,
+            freeQuantity: freeQty,
+            rate: rate,
+            discountPercent: discountPercent,
+            discountAmount: discountAmount,
+            gstRate: gstRateVal,
+            isExempt: isExempt,
+            isInterState: isInterState,
+          });
 
           rawTotalTaxable += calc.taxableValue;
           rawTotalCgst += calc.cgstAmount;
@@ -527,19 +572,22 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
           return {
             itemId: line.itemId,
             itemName: line.itemName || 'Item',
+            description: line.description || null,
             hsnSac: line.hsnSac || '8436',
             unit: line.unit || 'Nos',
             quantity: qty,
+            freeQuantity: freeQty,
             rate: rate,
             discountPercent: discountPercent,
-            discountAmount: Number(((qty * rate * discountPercent) / 100).toFixed(2)),
+            discountAmount: calc.taxableValue < (qty * rate) ? (qty * rate - calc.taxableValue) : 0,
             taxableValue: calc.taxableValue,
-            gstRate: gstRate,
+            gstRate: gstRateVal,
+            isExempt: calc.isExempt,
             cgstAmount: calc.cgstAmount,
             sgstAmount: calc.sgstAmount,
             igstAmount: calc.igstAmount,
             totalAmount: calc.totalAmount,
-            serialNumber: line.serialNumber,
+            serialNumber: line.serialNumber || null,
           };
         });
 

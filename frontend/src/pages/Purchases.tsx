@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../api';
 import { ShoppingBag, Plus, Eye, Edit, Trash2, Printer, Search } from 'lucide-react';
-import { PurchaseEditorModal } from '../components/PurchaseEditorModal';
 import { ViewPurchaseModal } from '../components/ViewPurchaseModal';
 import { DeletePurchaseModal } from '../components/DeletePurchaseModal';
+import { FullScreenBillingEngine } from '../components/FullScreenBillingEngine';
 
 export const Purchases: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [purchases, setPurchases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,6 +19,20 @@ export const Purchases: React.FC = () => {
   const [viewingPurchase, setViewingPurchase] = useState<any | null>(null);
   const [deletingPurchase, setDeletingPurchase] = useState<any | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  if (editorModalPurchase !== null) {
+    return (
+      <FullScreenBillingEngine
+        docType="PURCHASE"
+        editingDocId={editorModalPurchase?.id}
+        onBack={() => setEditorModalPurchase(null)}
+        onSaved={(saved) => {
+          setEditorModalPurchase(null);
+          loadPurchases();
+        }}
+      />
+    );
+  }
 
   useEffect(() => {
     loadPurchases();
@@ -183,14 +197,7 @@ export const Purchases: React.FC = () => {
         </div>
       </div>
 
-      {/* Editor Modal */}
-      {editorModalPurchase && (
-        <PurchaseEditorModal
-          purchase={editorModalPurchase.id ? editorModalPurchase : undefined}
-          onSaved={handleSaved}
-          onClose={() => setEditorModalPurchase(null)}
-        />
-      )}
+
 
       {/* View Modal */}
       {viewingPurchase && (

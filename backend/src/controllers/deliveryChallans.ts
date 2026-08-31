@@ -43,11 +43,15 @@ export async function createDeliveryChallan(req: AuthRequest, res: Response) {
       partyId,
       challanDate,
       deliveryAddress,
+      deliveryLocation,
       contactNumber,
       vehicleNumber,
       transporter,
+      transportName,
       reason,
       refOrderNo,
+      poNumber,
+      poDate,
       items,
       notes,
     } = req.body;
@@ -64,32 +68,39 @@ export async function createDeliveryChallan(req: AuthRequest, res: Response) {
       where: { key: 'delivery_challan_affects_stock' },
     });
     const affectsStock = setting ? setting.value === 'YES' : true;
+    const cDate = challanDate ? new Date(challanDate) : new Date();
 
     const result = await prisma.$transaction(async (tx) => {
-      const { docNumber, fy } = await generateDocumentNumber('DELIVERY_CHALLAN', challanDate ? new Date(challanDate) : new Date(), tx);
+      const { docNumber, fy } = await generateDocumentNumber('DELIVERY_CHALLAN', cDate, tx);
 
       const challan = await tx.deliveryChallan.create({
         data: {
           challanNumber: docNumber,
           financialYear: fy,
-          challanDate: challanDate ? new Date(challanDate) : new Date(),
+          challanDate: cDate,
           partyId: party.id,
           deliveryAddress: deliveryAddress || party.address || '',
+          deliveryLocation: deliveryLocation || null,
           contactNumber: contactNumber || party.mobile,
-          vehicleNumber,
-          transporter,
+          vehicleNumber: vehicleNumber || null,
+          transporter: transporter || transportName || null,
+          transportName: transportName || transporter || null,
           reason: reason || 'Delivery against sale',
-          refOrderNo,
+          refOrderNo: refOrderNo || null,
+          poNumber: poNumber || null,
+          poDate: poDate ? new Date(poDate) : null,
           affectsStock: affectsStock,
           stockDeducted: affectsStock,
           status: 'CONFIRMED',
-          notes,
+          notes: notes || null,
           items: {
             create: items.map((i: any) => ({
               itemId: i.itemId,
               itemName: i.itemName || 'Item',
+              description: i.description || null,
               unit: i.unit || 'Nos',
               quantity: Number(i.quantity) || 1,
+              freeQuantity: Number(i.freeQuantity) || 0,
             })),
           },
         },

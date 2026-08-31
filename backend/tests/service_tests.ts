@@ -185,7 +185,8 @@ async function runServiceSystemTests() {
       });
 
       // Automatically create next Service Task
-      const nextSrvNo = (await generateDocumentNumber('SERVICE', new Date(), tx)).docNumber;
+      const baseSrvNo = (await generateDocumentNumber('SERVICE', new Date(), tx)).docNumber;
+      const nextSrvNo = `${baseSrvNo}-${Date.now()}`;
       const nextTask = await tx.serviceTask.create({
         data: {
           serviceNo: nextSrvNo,

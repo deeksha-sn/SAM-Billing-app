@@ -250,17 +250,22 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, c
                 <div className="p-1 border-r border-b border-black font-bold">Date</div>
                 <div className="p-1 border-b border-black font-bold">{new Date(invoice.invoiceDate).toLocaleDateString('en-IN')}</div>
 
-                <div className="p-1 border-r border-b border-black font-bold">E-way Bill number</div>
+                <div className="p-1 border-r border-b border-black font-bold">Payment Mode</div>
+                <div className="p-1 border-b border-black font-bold uppercase">{invoice.paymentMode || 'Credit'}</div>
+
+                <div className="p-1 border-r border-b border-black font-bold">Due Date</div>
+                <div className="p-1 border-b border-black font-bold">{invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('en-IN') : '-'}</div>
+
+                <div className="p-1 border-r border-b border-black font-bold">Transport Name</div>
+                <div className="p-1 border-b border-black font-bold">{invoice.transportName || '-'}</div>
+
+                <div className="p-1 border-r border-b border-black font-bold">E-way Bill No</div>
                 <div className="p-1 border-b border-black font-mono font-bold">{invoice.ewayBillNo || '-'}</div>
 
-                <div className="p-1 border-r border-b border-black font-bold">Place of supply</div>
-                <div className="p-1 border-b border-black font-bold">{invoice.placeOfSupply || `${party.stateCode || '29'}-${party.state || 'Karnataka'}`}</div>
-
-                <div className="p-1 border-r border-black font-bold">PO date</div>
-                <div className="p-1 border-r border-black">{invoice.poDate ? new Date(invoice.poDate).toLocaleDateString('en-IN') : '-'}</div>
-
-                <div className="p-1 font-bold border-black">PO number</div>
-                <div className="p-1 font-mono text-[9px]">{invoice.poNumber || '-'}</div>
+                <div className="p-1 border-r border-black font-bold">PO No / Date</div>
+                <div className="p-1 font-mono text-[9px]">
+                  {invoice.poNumber ? `${invoice.poNumber} (${invoice.poDate ? new Date(invoice.poDate).toLocaleDateString('en-IN') : ''})` : '-'}
+                </div>
               </div>
             </div>
 
@@ -277,11 +282,11 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, c
               </div>
 
               <div className="p-2 space-y-0.5 text-[10.5px]">
-                <p className="font-bold text-black uppercase text-[10px] mb-0.5">Ship To</p>
+                <p className="font-bold text-black uppercase text-[10px] mb-0.5">Ship To / Delivery Location</p>
                 <p className="font-bold text-black text-xs uppercase">{party.name}</p>
-                <p className="text-gray-800">{invoice.deliveryAddress || party.address || party.village}</p>
+                <p className="text-gray-800">{invoice.deliveryLocation || invoice.deliveryAddress || party.address || party.village}</p>
                 <p className="text-gray-800">{party.taluk ? `${party.taluk}, ` : ''}{party.district ? `${party.district}, ` : ''}{party.state}</p>
-                <p className="text-gray-800 font-semibold">CONTACT NO:{party.mobile}</p>
+                <p className="text-gray-800 font-semibold">Contact No. : {party.mobile}</p>
               </div>
             </div>
 
