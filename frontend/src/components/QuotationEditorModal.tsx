@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { X, Plus, Trash2, Save, Layers, Building, HelpCircle, Check, FileText } from 'lucide-react';
+import { SearchablePartyCombobox } from './SearchablePartyCombobox';
 
 interface QuotationEditorModalProps {
   quotation?: any;
@@ -412,32 +413,26 @@ export const QuotationEditorModal: React.FC<QuotationEditorModalProps> = ({
               />
             </div>
 
-            {/* Customer Select */}
-            <div className="md:col-span-2">
-              <div className="flex justify-between items-center mb-1">
-                <label className="block text-xs font-bold text-slate-700">Select Customer *</label>
-                <button
-                  type="button"
-                  onClick={() => setShowQuickCustomerModal(true)}
-                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>+ Quick Add Customer</span>
-                </button>
-              </div>
-              <select
-                value={partyId}
-                onChange={(e) => handlePartyChange(e.target.value)}
-                required
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:border-emerald-600 focus:outline-none"
-              >
-                <option value="">-- Choose Customer --</option>
-                {parties.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.mobile}) - {p.village || p.state}
-                  </option>
-                ))}
-              </select>
+            {/* Customer Searchable Combobox */}
+            <div>
+              <SearchablePartyCombobox
+                label="Customer Name"
+                required={true}
+                partyType="CUSTOMER"
+                selectedPartyId={partyId}
+                parties={parties}
+                onSelectParty={(p) => {
+                  if (p) {
+                    handlePartyChange(p.id);
+                  } else {
+                    setPartyId('');
+                  }
+                }}
+                onPartyCreated={(newP) => {
+                  setParties([...parties, newP]);
+                  handlePartyChange(newP.id);
+                }}
+              />
             </div>
 
             {/* Reference / PO Notes */}

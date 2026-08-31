@@ -31,6 +31,7 @@ import {
   getStateNameFromCode,
 } from '../utils/gstHelper';
 import { QuickAddPartyModal } from './QuickAddPartyModal';
+import { SearchablePartyCombobox } from './SearchablePartyCombobox';
 
 export interface FullScreenBillingEngineProps {
   docType: 'INVOICE' | 'PURCHASE' | 'QUOTATION' | 'DELIVERY_CHALLAN';
@@ -508,33 +509,27 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
           
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 text-xs">
             
-            {/* Customer / Supplier Selector */}
-            <div className="space-y-1 md:col-span-2">
-              <div className="flex justify-between items-center mb-1">
-                <label className="font-extrabold text-slate-300 uppercase tracking-wider text-[11px]">
-                  {isPurchase ? 'Supplier *' : 'Customer Name *'}
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowQuickAddParty(true)}
-                  className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 text-[11px]"
-                >
-                  <UserPlus className="w-3.5 h-3.5" /> + Quick Add
-                </button>
-              </div>
-
-              <select
-                value={selectedPartyId}
-                onChange={(e) => handlePartySelect(e.target.value)}
-                className="w-full p-3 bg-slate-900 border border-slate-600 rounded-xl font-bold text-sm text-white focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="">-- Select {isPurchase ? 'Supplier' : 'Customer'} --</option>
-                {parties.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} • {p.mobile || 'No Mobile'} ({p.village || p.state || 'Karnataka'})
-                  </option>
-                ))}
-              </select>
+            {/* Customer / Supplier Searchable Combobox */}
+            <div className="md:col-span-2">
+              <SearchablePartyCombobox
+                label={isPurchase ? 'Supplier' : 'Customer Name'}
+                required={true}
+                partyType={partyTypeFilter as 'CUSTOMER' | 'SUPPLIER'}
+                selectedPartyId={selectedPartyId}
+                parties={parties}
+                onSelectParty={(p) => {
+                  if (p) {
+                    handlePartySelect(p.id);
+                  } else {
+                    setSelectedPartyId('');
+                    setSelectedParty(null);
+                  }
+                }}
+                onPartyCreated={(newP) => {
+                  setParties([...parties, newP]);
+                  handlePartySelect(newP.id);
+                }}
+              />
             </div>
 
             {/* Document Date */}

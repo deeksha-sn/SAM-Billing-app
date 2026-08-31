@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Save, ShoppingBag, UserPlus } from 'lucide-react';
 import { apiRequest } from '../api';
+import { SearchablePartyCombobox } from './SearchablePartyCombobox';
 
 interface PurchaseEditorModalProps {
   purchase?: any;
@@ -230,20 +231,24 @@ export const PurchaseEditorModal: React.FC<PurchaseEditorModalProps> = ({
           {/* Supplier & Details Grid */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-200">
             <div>
-              <label className="block font-bold text-gray-700 mb-1">Supplier *</label>
-              <select
-                value={partyId}
-                onChange={(e) => setPartyId(e.target.value)}
-                required
-                className="w-full p-2.5 bg-white border border-gray-300 rounded-xl font-semibold focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="">-- Select Supplier --</option>
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.mobile})
-                  </option>
-                ))}
-              </select>
+              <SearchablePartyCombobox
+                label="Supplier"
+                required={true}
+                partyType="SUPPLIER"
+                selectedPartyId={partyId}
+                parties={suppliers}
+                onSelectParty={(p) => {
+                  if (p) {
+                    setPartyId(p.id);
+                  } else {
+                    setPartyId('');
+                  }
+                }}
+                onPartyCreated={(newP) => {
+                  setSuppliers([...suppliers, newP]);
+                  setPartyId(newP.id);
+                }}
+              />
             </div>
 
             <div>

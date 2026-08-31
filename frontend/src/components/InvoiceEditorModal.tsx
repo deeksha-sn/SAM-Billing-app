@@ -4,6 +4,7 @@ import { apiRequest } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { QuickAddPartyModal } from './QuickAddPartyModal';
 import { QuickAddItemModal } from './QuickAddItemModal';
+import { SearchablePartyCombobox } from './SearchablePartyCombobox';
 
 interface InvoiceEditorModalProps {
   invoice?: any;
@@ -486,19 +487,24 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 uppercase text-[10px] mb-1">Select Customer *</label>
-                <select
-                  value={selectedPartyId}
-                  onChange={(e) => handlePartySelect(e.target.value)}
-                  className="w-full p-2.5 border rounded-xl font-bold text-slate-900 bg-white"
-                >
-                  <option value="">-- Choose Customer --</option>
-                  {parties.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.mobile}) - {p.state}
-                    </option>
-                  ))}
-                </select>
+                <SearchablePartyCombobox
+                  label="Customer Name"
+                  required={true}
+                  partyType="CUSTOMER"
+                  selectedPartyId={selectedPartyId}
+                  parties={parties}
+                  onSelectParty={(p) => {
+                    if (p) {
+                      handlePartySelect(p.id);
+                    } else {
+                      setSelectedPartyId('');
+                    }
+                  }}
+                  onPartyCreated={(newP) => {
+                    setParties([...parties, newP]);
+                    handlePartySelect(newP.id);
+                  }}
+                />
               </div>
 
               <div>

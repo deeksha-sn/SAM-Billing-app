@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Save, Truck } from 'lucide-react';
 import { apiRequest } from '../api';
+import { SearchablePartyCombobox } from './SearchablePartyCombobox';
 
 interface ChallanEditorModalProps {
   challan?: any;
@@ -184,20 +185,24 @@ export const ChallanEditorModal: React.FC<ChallanEditorModalProps> = ({
           {/* Customer & Details Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-200">
             <div>
-              <label className="block font-bold text-gray-700 mb-1">Customer *</label>
-              <select
-                value={partyId}
-                onChange={(e) => handlePartyChange(e.target.value)}
-                required
-                className="w-full p-2.5 bg-white border border-gray-300 rounded-xl font-semibold focus:ring-2 focus:ring-slate-900"
-              >
-                <option value="">-- Select Customer --</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.mobile})
-                  </option>
-                ))}
-              </select>
+              <SearchablePartyCombobox
+                label="Customer"
+                required={true}
+                partyType="CUSTOMER"
+                selectedPartyId={partyId}
+                parties={customers}
+                onSelectParty={(p) => {
+                  if (p) {
+                    handlePartyChange(p.id);
+                  } else {
+                    setPartyId('');
+                  }
+                }}
+                onPartyCreated={(newP) => {
+                  setCustomers([...customers, newP]);
+                  handlePartyChange(newP.id);
+                }}
+              />
             </div>
 
             <div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, UserPlus } from 'lucide-react';
+import { X, UserPlus, Building, MapPin } from 'lucide-react';
 import { apiRequest } from '../api';
+import { INDIAN_STATES, getStateNameFromCode } from '../utils/gstHelper';
 
 interface QuickAddPartyModalProps {
   type: 'CUSTOMER' | 'SUPPLIER';
@@ -11,19 +12,41 @@ interface QuickAddPartyModalProps {
 export const QuickAddPartyModal: React.FC<QuickAddPartyModalProps> = ({ type, onSuccess, onClose }) => {
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
+  const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
+  const [shippingAddress, setShippingAddress] = useState('');
   const [village, setVillage] = useState('');
   const [district, setDistrict] = useState('Haveri');
-  const [state, setState] = useState('Karnataka');
   const [stateCode, setStateCode] = useState('29');
+  const [state, setState] = useState('Karnataka');
   const [gstin, setGstin] = useState('');
   const [customerType, setCustomerType] = useState('FARMER');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const handleStateChange = (code: string) => {
+    setStateCode(code);
+    setState(getStateNameFromCode(code));
+  };
+
+  const handleGstinChange = (val: string) => {
+    const uppercaseVal = val.toUpperCase().trim();
+    setGstin(uppercaseVal);
+    // If user enters first 2 digits of GSTIN (e.g., 27 for MH, 29 for KA, 33 for TN), auto select state
+    if (uppercaseVal.length >= 2) {
+      const codeCandidate = uppercaseVal.substring(0, 2);
+      const match = INDIAN_STATES.find((s) => s.code === codeCandidate);
+      if (match) {
+        setStateCode(match.code);
+        setState(match.name);
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !mobile.trim()) {
-      setError('Name and Mobile number are required');
+      setError('Party Name and Mobile number are required');
       return;
     }
 
@@ -38,6 +61,9 @@ export const QuickAddPartyModal: React.FC<QuickAddPartyModalProps> = ({ type, on
           type,
           customerType,
           mobile: mobile.trim(),
+          email: email.trim() || null,
+          address: address.trim() || village.trim(),
+          shippingAddress: shippingAddress.trim() || address.trim() || village.trim(),
           village: village.trim(),
           district: district.trim(),
           state: state.trim(),
@@ -55,124 +81,152 @@ export const QuickAddPartyModal: React.FC<QuickAddPartyModalProps> = ({ type, on
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-        <div className="flex justify-between items-center pb-3 border-b mb-4">
-          <h3 className="font-bold text-gray-900 flex items-center gap-2">
-            <UserPlus className="w-5 h-5 text-emerald-600" />
-            <span>+ Quick Add {type === 'CUSTOMER' ? 'Customer' : 'Supplier'}</span>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-900 border border-slate-700 text-white rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+        
+        {/* Modal Header */}
+        <div className="flex justify-between items-center pb-3 border-b border-slate-700">
+          <h3 className="font-extrabold text-base text-white flex items-center gap-2">
+            <UserPlus className="w-5 h-5 text-emerald-400" />
+            <span>+ Quick Add GST {type === 'CUSTOMER' ? 'Customer' : 'Supplier'}</span>
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-slate-400 hover:text-white transition">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {error && <div className="mb-4 p-3 bg-red-50 text-red-700 text-xs rounded-lg">{error}</div>}
+        {error && <div className="p-3 bg-red-900/80 border border-red-700 text-red-200 text-xs rounded-xl font-bold">{error}</div>}
 
-        <form onSubmit={handleSubmit} className="space-y-3 text-sm">
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs font-sans">
+          
+          {/* Name */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">{type === 'CUSTOMER' ? 'Customer' : 'Supplier'} Name *</label>
+            <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+              {type === 'CUSTOMER' ? 'Customer' : 'Supplier'} Name *
+            </label>
             <input
               type="text"
               required
-              placeholder="e.g. Ramesh Agro Farm"
+              placeholder="e.g. Ramesh Agro Farm / Vijay Logistics"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl font-bold text-white text-sm focus:ring-2 focus:ring-emerald-500"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
+            {/* Mobile */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Mobile Number *</label>
+              <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">Mobile Number *</label>
               <input
                 type="text"
                 required
-                placeholder="e.g. 9845012345"
+                placeholder="e.g. 9844011223"
                 value={mobile}
                 onChange={(e) => setMobile(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl font-mono font-bold text-white focus:ring-2 focus:ring-emerald-500"
               />
             </div>
+
+            {/* Category */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Category</label>
+              <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">Category</label>
               <select
                 value={customerType}
                 onChange={(e) => setCustomerType(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white"
+                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl font-bold text-white focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="FARMER">Farmer</option>
-                <option value="RETAIL">Retail</option>
-                <option value="DEALER">Dealer</option>
-                <option value="BUSINESS">Business</option>
+                <option value="RETAIL">Retail Customer</option>
+                <option value="DEALER">Dealer / Distributor</option>
+                <option value="BUSINESS">Business / Company</option>
               </select>
             </div>
           </div>
 
+          {/* GSTIN & State Code Row */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Village / Address</label>
-              <input
-                type="text"
-                placeholder="Village/Town"
-                value={village}
-                onChange={(e) => setVillage(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">District</label>
-              <input
-                type="text"
-                placeholder="District"
-                value={district}
-                onChange={(e) => setDistrict(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">State & Code</label>
-              <div className="flex gap-1">
-                <input
-                  type="text"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  className="w-2/3 px-2 py-2 border rounded-lg text-xs"
-                />
-                <input
-                  type="text"
-                  value={stateCode}
-                  onChange={(e) => setStateCode(e.target.value)}
-                  className="w-1/3 px-2 py-2 border rounded-lg text-xs text-center font-mono"
-                  placeholder="Code"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">GSTIN (Optional)</label>
+              <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">GSTIN (Optional)</label>
               <input
                 type="text"
                 placeholder="29ABCDE1234F1Z5"
                 value={gstin}
-                onChange={(e) => setGstin(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono text-xs uppercase"
+                onChange={(e) => handleGstinChange(e.target.value)}
+                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl font-mono font-bold text-amber-300 uppercase focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">State & State Code *</label>
+              <select
+                value={stateCode}
+                onChange={(e) => handleStateChange(e.target.value)}
+                className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl font-bold text-white focus:ring-2 focus:ring-emerald-500"
+              >
+                {INDIAN_STATES.map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.code} - {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Billing Address & Village */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">Billing Address / Village</label>
+              <input
+                type="text"
+                placeholder="Village / Road / Town"
+                value={village}
+                onChange={(e) => {
+                  setVillage(e.target.value);
+                  if (!address) setAddress(e.target.value);
+                }}
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">District / City</label>
+              <input
+                type="text"
+                placeholder="Haveri / Bangalore"
+                value={district}
+                onChange={(e) => setDistrict(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium"
               />
             </div>
           </div>
 
-          <div className="pt-3 flex justify-end gap-2 border-t">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-xs font-semibold">
+          {/* Shipping Address */}
+          <div>
+            <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">Shipping Address / Delivery Site</label>
+            <input
+              type="text"
+              placeholder="Same as Billing / Farm Site No. 2"
+              value={shippingAddress}
+              onChange={(e) => setShippingAddress(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="pt-3 flex justify-end gap-2 border-t border-slate-700">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-slate-400 hover:text-white text-xs font-bold transition"
+            >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 shadow"
+              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-lg shadow-emerald-600/30 transition flex items-center gap-1.5"
             >
-              {loading ? 'Saving...' : 'Save & Select'}
+              {loading ? 'Saving...' : 'Save & Auto-Select'}
             </button>
           </div>
         </form>
