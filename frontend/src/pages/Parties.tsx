@@ -1,190 +1,256 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../api';
-import { Users, Plus, Phone, MapPin, FileText, Wrench, ArrowRight } from 'lucide-react';
-import { QuickAddPartyModal } from '../components/QuickAddPartyModal';
+import { Users, Plus, Eye, Edit, Trash2, Search, Power } from 'lucide-react';
+import { PartyEditorModal } from '../components/PartyEditorModal';
+import { ViewPartyModal } from '../components/ViewPartyModal';
+import { DeletePartyModal } from '../components/DeletePartyModal';
 
 export const Parties: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [parties, setParties] = useState<any[]>([]);
-  const [selectedParty, setSelectedParty] = useState<any>(null);
-  const [partyDetail, setPartyDetail] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'CUSTOMER' | 'SUPPLIER'>('CUSTOMER');
-  const [search, setSearch] = useState('');
-  const [showCreateModal, setShowCreateModal] = useState(searchParams.get('create') === 'true');
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'CUSTOMER' | 'SUPPLIER' | 'ALL'>('CUSTOMER');
+
+  // Modals state
+  const [editorModalParty, setEditorModalParty] = useState<any | null>(
+    searchParams.get('create') === 'true' ? {} : null
+  );
+  const [viewingParty, setViewingParty] = useState<any | null>(null);
+  const [partySummary, setPartySummary] = useState<any | null>(null);
+  const [deletingParty, setDeletingParty] = useState<any | null>(null);
 
   useEffect(() => {
     loadParties();
-  }, [activeTab, search]);
+  }, [activeTab]);
 
   const loadParties = async () => {
+    setLoading(true);
     try {
-      const res = await apiRequest(`/parties?type=${activeTab}&search=${encodeURIComponent(search)}`);
-      setParties(res.parties);
+      const typeQuery = activeTab !== 'ALL' ? `?type=${activeTab}` : '';
+      const res = await apiRequest(`/parties${typeQuery}`);
+      setParties(res.parties || []);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load parties:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const loadPartyDetail = async (partyId: string) => {
+  const handleOpenView = async (party: any) => {
     try {
-      const res = await apiRequest(`/parties/${partyId}`);
-      setPartyDetail(res);
-      setSelectedParty(res.party);
+      const res = await apiRequest(`/parties/${party.id}`);
+      setViewingParty(res.party);
+      setPartySummary(res.summary);
     } catch (err) {
-      console.error(err);
+      setViewingParty(party);
     }
   };
+
+  const handleSaved = (saved: any) => {
+    setEditorModalParty(null);
+    setViewingParty(null);
+    loadParties();
+  };
+
+  const handleDeleteSuccess = (msg: string) => {
+    setDeletingParty(null);
+    setViewingParty(null);
+    loadParties();
+  };
+
+  const filteredParties = parties.filter((p) => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      p.name?.toLowerCase().includes(q) ||
+      p.mobile?.toLowerCase().includes(q) ||
+      p.gstin?.toLowerCase().includes(q) ||
+      p.village?.toLowerCase().includes(q) ||
+      p.district?.toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
+      
+      {/* Top Bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Parties (Customers & Suppliers)</h1>
-          <p className="text-sm text-gray-500">Party Master Directory with Connected Document History</p>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Users className="w-6 h-6 text-blue-900" />
+            Parties (Customers & Suppliers)
+          </h1>
+          <p className="text-xs text-gray-500 font-medium">Customer & Supplier Master Profiles with Historical Safety</p>
         </div>
+
         <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-md transition"
+          onClick={() => setEditorModalParty({})}
+          className="flex items-center gap-2 px-5 py-2.5 bg-blue-900 text-white rounded-2xl font-bold hover:bg-blue-950 shadow-lg shadow-blue-900/30 transition text-xs"
         >
-          <Plus className="w-5 h-5" />
+          <Plus className="w-4 h-4" />
           <span>+ Add New Party</span>
         </button>
       </div>
 
       {/* Tabs & Search */}
-      <div className="flex justify-between items-center gap-4">
-        <div className="flex bg-gray-200 p-1 rounded-xl">
+      <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
+        <div className="flex bg-gray-200 p-1 rounded-2xl self-start">
           <button
-            onClick={() => { setActiveTab('CUSTOMER'); setSelectedParty(null); }}
-            className={`px-5 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'CUSTOMER' ? 'bg-white text-emerald-800 shadow' : 'text-gray-600'}`}
+            onClick={() => setActiveTab('CUSTOMER')}
+            className={`px-5 py-2 rounded-xl font-bold text-xs transition ${
+              activeTab === 'CUSTOMER' ? 'bg-white text-blue-900 shadow' : 'text-gray-600'
+            }`}
           >
-            Customers ({parties.length})
+            Customers
           </button>
           <button
-            onClick={() => { setActiveTab('SUPPLIER'); setSelectedParty(null); }}
-            className={`px-5 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'SUPPLIER' ? 'bg-white text-purple-800 shadow' : 'text-gray-600'}`}
+            onClick={() => setActiveTab('SUPPLIER')}
+            className={`px-5 py-2 rounded-xl font-bold text-xs transition ${
+              activeTab === 'SUPPLIER' ? 'bg-white text-purple-900 shadow' : 'text-gray-600'
+            }`}
           >
             Suppliers
           </button>
+          <button
+            onClick={() => setActiveTab('ALL')}
+            className={`px-5 py-2 rounded-xl font-bold text-xs transition ${
+              activeTab === 'ALL' ? 'bg-white text-gray-900 shadow' : 'text-gray-600'
+            }`}
+          >
+            All Parties ({parties.length})
+          </button>
         </div>
 
-        <input
-          type="text"
-          placeholder="Search party by name, mobile, village, GSTIN..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="px-4 py-2 bg-white border border-gray-300 rounded-xl text-sm w-72 focus:ring-2 focus:ring-emerald-500"
-        />
+        <div className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-gray-200 shadow-sm max-w-md w-full">
+          <Search className="w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search party by name, mobile, GSTIN, village..."
+            className="w-full text-xs outline-none bg-transparent"
+          />
+        </div>
       </div>
 
-      {/* Main Grid: List + Connected Profile View */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Parties Table */}
-        <div className="lg:col-span-1 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden max-h-[700px] overflow-y-auto">
-          <div className="divide-y divide-gray-100">
-            {parties.map((p) => (
-              <div
-                key={p.id}
-                onClick={() => loadPartyDetail(p.id)}
-                className={`p-4 hover:bg-emerald-50 cursor-pointer transition ${selectedParty?.id === p.id ? 'bg-emerald-50/80 border-l-4 border-emerald-600' : ''}`}
-              >
-                <div className="flex justify-between items-start">
-                  <h3 className="font-bold text-sm text-gray-900">{p.name}</h3>
-                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 bg-gray-100 text-gray-700 rounded">
-                    {p.customerType || p.type}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-600 flex items-center gap-1 mt-1">
-                  <Phone className="w-3 h-3 text-gray-400" /> <span className="font-mono">{p.mobile}</span>
-                </p>
-                <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                  <MapPin className="w-3 h-3 text-gray-400" /> {p.village ? `${p.village}, ` : ''}{p.district}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Party Profile Detail */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-          {selectedParty && partyDetail ? (
-            <div className="space-y-6">
-              <div className="flex justify-between items-start pb-4 border-b">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">{selectedParty.name}</h2>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {selectedParty.address || selectedParty.village}, {selectedParty.taluk ? `${selectedParty.taluk}, ` : ''}{selectedParty.district}, {selectedParty.state} - {selectedParty.pincode}
-                  </p>
-                  <p className="text-xs text-gray-700 font-mono mt-1">Mobile: {selectedParty.mobile} {selectedParty.gstin ? `| GSTIN: ${selectedParty.gstin}` : ''}</p>
-                </div>
-                <div className="text-right bg-emerald-50 p-3 rounded-xl border border-emerald-200">
-                  <span className="text-xs text-emerald-700 font-bold uppercase">Total Lifetime Sales</span>
-                  <p className="text-lg font-black font-mono text-emerald-900">₹{partyDetail.summary?.totalSales.toLocaleString('en-IN')}</p>
-                  <p className="text-xs text-red-600 font-bold mt-0.5">Outstanding: ₹{partyDetail.summary?.salesBalance.toLocaleString('en-IN')}</p>
-                </div>
-              </div>
-
-              {/* Connected Machines */}
-              {partyDetail.party.machines?.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <Wrench className="w-4 h-4 text-emerald-600" /> Registered Machines
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {partyDetail.party.machines.map((m: any) => (
-                      <div key={m.id} className="p-3 bg-gray-50 rounded-xl border text-xs">
-                        <p className="font-bold text-gray-900">{m.model}</p>
-                        <p className="text-gray-600 font-mono">S/N: {m.serialNumber}</p>
-                        <p className="text-emerald-700 font-medium mt-1">Sale Date: {new Date(m.saleDate).toLocaleDateString('en-IN')}</p>
+      {/* Parties Table */}
+      <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead className="bg-gray-50 border-b text-gray-700 font-extrabold uppercase text-[10px] tracking-wider">
+              <tr>
+                <th className="p-4">Party Name</th>
+                <th className="p-4">Mobile</th>
+                <th className="p-4">Category</th>
+                <th className="p-4">Village / City</th>
+                <th className="p-4">GSTIN</th>
+                <th className="p-4 text-right">Opening Balance</th>
+                <th className="p-4 text-center">Status</th>
+                <th className="p-4 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 font-medium">
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center text-gray-400 font-medium">Loading party records...</td>
+                </tr>
+              ) : filteredParties.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center text-gray-400 font-medium">No parties found</td>
+                </tr>
+              ) : (
+                filteredParties.map((p) => (
+                  <tr key={p.id} className="hover:bg-blue-50/30 transition">
+                    <td className="p-4 font-extrabold text-gray-900">{p.name}</td>
+                    <td className="p-4 font-mono font-bold text-gray-800">{p.mobile}</td>
+                    <td className="p-4">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-gray-100 text-gray-700">
+                        {p.type} • {p.customerType}
+                      </span>
+                    </td>
+                    <td className="p-4 text-gray-600">{p.village || p.district || '-'}</td>
+                    <td className="p-4 font-mono text-gray-600">{p.gstin || '-'}</td>
+                    <td className="p-4 text-right font-mono font-bold text-gray-800">
+                      ₹{(p.openingBalance || 0).toLocaleString('en-IN')}
+                    </td>
+                    <td className="p-4 text-center">
+                      <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full ${
+                        p.active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {p.active ? 'ACTIVE' : 'INACTIVE'}
+                      </span>
+                    </td>
+                    <td className="p-4 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => handleOpenView(p)}
+                          title="View Profile"
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setEditorModalParty(p)}
+                          title="Edit Party"
+                          className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg transition"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setDeletingParty(p)}
+                          title={p.active ? 'Delete / Deactivate Party' : 'Reactivate Party'}
+                          className={`p-1.5 rounded-lg transition ${p.active ? 'text-red-600 hover:bg-red-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
+                        >
+                          {p.active ? <Trash2 className="w-4 h-4" /> : <Power className="w-4 h-4" />}
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </td>
+                  </tr>
+                ))
               )}
-
-              {/* Invoices History */}
-              <div>
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <FileText className="w-4 h-4 text-emerald-600" /> Recent Invoices
-                </h3>
-                <div className="space-y-2">
-                  {partyDetail.party.invoices?.map((inv: any) => (
-                    <div key={inv.id} className="p-3 bg-gray-50 rounded-xl flex justify-between items-center text-xs">
-                      <div>
-                        <span className="font-bold font-mono text-emerald-800">{inv.invoiceNumber}</span>
-                        <span className="text-gray-500 ml-2">{new Date(inv.invoiceDate).toLocaleDateString('en-IN')}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-mono font-bold">₹{inv.grandTotal.toLocaleString('en-IN')}</span>
-                        <span className={`ml-2 px-2 py-0.5 font-bold rounded ${inv.status === 'PAID' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
-                          {inv.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="p-12 text-center text-gray-400">
-              <Users className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-              <p className="text-sm font-semibold">Select a customer or supplier to view connected profile history.</p>
-            </div>
-          )}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {showCreateModal && (
-        <QuickAddPartyModal
-          type={activeTab}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={() => {
-            setShowCreateModal(false);
-            loadParties();
-          }}
+      {/* Editor Modal */}
+      {editorModalParty && (
+        <PartyEditorModal
+          party={editorModalParty.id ? editorModalParty : undefined}
+          defaultType={activeTab !== 'ALL' ? activeTab : 'CUSTOMER'}
+          onSaved={handleSaved}
+          onClose={() => setEditorModalParty(null)}
         />
       )}
+
+      {/* View Modal */}
+      {viewingParty && (
+        <ViewPartyModal
+          party={viewingParty}
+          summary={partySummary}
+          onEdit={() => {
+            setEditorModalParty(viewingParty);
+            setViewingParty(null);
+          }}
+          onDelete={() => {
+            setDeletingParty(viewingParty);
+            setViewingParty(null);
+          }}
+          onClose={() => setViewingParty(null)}
+        />
+      )}
+
+      {/* Delete / Deactivate Modal */}
+      {deletingParty && (
+        <DeletePartyModal
+          party={deletingParty}
+          onSuccess={handleDeleteSuccess}
+          onClose={() => setDeletingParty(null)}
+        />
+      )}
+
     </div>
   );
 };

@@ -4,11 +4,15 @@ import { AuthRequest } from '../middleware/auth';
 
 export async function getParties(req: AuthRequest, res: Response) {
   try {
-    const { type, search } = req.query;
+    const { type, search, active } = req.query;
     const where: any = {};
 
     if (type) {
       where.type = type as string;
+    }
+
+    if (active !== undefined) {
+      where.active = active === 'true';
     }
 
     if (search) {
@@ -144,6 +148,7 @@ export async function createParty(req: AuthRequest, res: Response) {
         openingBalance: Number(openingBalance) || 0,
         creditLimit: Number(creditLimit) || 0,
         notes,
+        active: true,
       },
     });
 
@@ -175,14 +180,82 @@ export async function updateParty(req: AuthRequest, res: Response) {
 export async function deleteParty(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
-    // Check if used in invoices/purchases
+    const party = await prisma.party.findUnique({ where: { id } });
+
+    if (!party) return res.status(404).json({ error: 'Party not found' });
+
+    // Check all historical references
     const invoiceCount = await prisma.invoice.count({ where: { partyId: id } });
-    if (invoiceCount > 0) {
-      return res.status(400).json({ error: 'Cannot delete party associated with existing invoices' });
+    const purchaseCount = await prisma.purchaseInvoice.count({ where: { partyId: id } });
+    const quotationCount = await prisma.quotation.count({ where: { partyId: id } });
+    const challanCount = await prisma.deliveryChallan.count({ where: { partyId: id } });
+    const paymentCount = await prisma.payment.count({ where: { partyId: id } });
+    const machineCount = await prisma.machine.count({ where: { partyId: id } });
+    const serviceCount = await prisma.serviceTask.count({ where: { partyId: id } });
+
+    const totalReferences =
+      invoiceCount + purchaseCount + quotationCount + challanCount + paymentCount + machineCount + serviceCount;
+
+    if (totalReferences > 0) {
+      return res.status(400).json({
+        canDelete: false,
+        error: `Cannot permanently delete party "${party.name}" because it is associated with ${totalReferences} existing business record(s). You can deactivate this party instead.`,
+        references: {
+          invoices: invoiceCount,
+          purchases: purchaseCount,
+          quotations: quotationCount,
+          deliveryChallans: challanCount,
+          payments: paymentCount,
+          machines: machineCount,
+          services: serviceCount,
+        },
+      });
     }
 
     await prisma.party.delete({ where: { id } });
-    return res.json({ message: 'Party deleted successfully' });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user?.id,
+        action: 'PARTY_DELETE',
+        entityType: 'PARTY',
+        entityId: id,
+        reference: party.name,
+      },
+    });
+
+    return res.json({ canDelete: true, message: `Party "${party.name}" deleted permanently.` });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function togglePartyStatus(req: AuthRequest, res: Response) {
+  try {
+    const { id } = req.params;
+    const party = await prisma.party.findUnique({ where: { id } });
+
+    if (!party) return res.status(404).json({ error: 'Party not found' });
+
+    const updated = await prisma.party.update({
+      where: { id },
+      data: { active: !party.active },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user?.id,
+        action: updated.active ? 'PARTY_REACTIVATE' : 'PARTY_DEACTIVATE',
+        entityType: 'PARTY',
+        entityId: id,
+        reference: updated.name,
+      },
+    });
+
+    return res.json({
+      message: `Party "${updated.name}" ${updated.active ? 'reactivated' : 'deactivated'} successfully!`,
+      party: updated,
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

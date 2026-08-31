@@ -4,13 +4,13 @@ import { authenticate, authorize } from '../middleware/auth';
 import { login, getCurrentUser, getUsers, createUser, updateUser } from '../controllers/auth';
 import { getCompanyProfile, updateCompanyProfile, getSystemSettings, updateSystemSetting, getDocumentNumberConfigs, updateDocumentNumberConfig } from '../controllers/settings';
 import { getTermsTemplates, getTermsTemplateById, createTermsTemplate, updateTermsTemplate, deleteTermsTemplate, duplicateTermsTemplate, setDefaultTermsTemplate } from '../controllers/terms';
-import { getParties, getPartyById, createParty, updateParty, deleteParty } from '../controllers/parties';
+import { getParties, getPartyById, createParty, updateParty, deleteParty, togglePartyStatus } from '../controllers/parties';
 import { getItems, getItemById, createItem, updateItem, adjustStock, getCategories, createCategory, getUnits, createUnit } from '../controllers/items';
 import { getBOMs, getBOMByFinishedItem, saveBOM } from '../controllers/bom';
 import { getInvoices, getInvoiceById, createInvoice, updateInvoice, cancelInvoice, deleteInvoice } from '../controllers/sales';
 import { getQuotations, getQuotationById, createQuotation, updateQuotation, deleteQuotation, convertQuotationToInvoice } from '../controllers/quotations';
-import { getDeliveryChallans, createDeliveryChallan } from '../controllers/deliveryChallans';
-import { getPurchases, createPurchase } from '../controllers/purchases';
+import { getDeliveryChallans, getDeliveryChallanById, createDeliveryChallan, updateDeliveryChallan, deleteDeliveryChallan } from '../controllers/deliveryChallans';
+import { getPurchases, getPurchaseById, createPurchase, updatePurchase, deletePurchase } from '../controllers/purchases';
 import { getPayments, createPayment } from '../controllers/payments';
 import { getMachines, getMachineBySerial, createMachine } from '../controllers/machines';
 import { getServices, createServiceTask, updateServiceStatus, completeServiceTask, getTechnicianTodayJobs } from '../controllers/services';
@@ -55,6 +55,7 @@ router.get('/parties', getParties);
 router.get('/parties/:id', getPartyById);
 router.post('/parties', createParty);
 router.put('/parties/:id', updateParty);
+router.post('/parties/:id/toggle-status', togglePartyStatus);
 router.delete('/parties/:id', authorize(['ADMIN']), deleteParty);
 
 // Items & Stock
@@ -91,11 +92,17 @@ router.post('/quotations/:id/convert-to-invoice', convertQuotationToInvoice);
 
 // Delivery Challans
 router.get('/delivery-challans', getDeliveryChallans);
+router.get('/delivery-challans/:id', getDeliveryChallanById);
 router.post('/delivery-challans', createDeliveryChallan);
+router.put('/delivery-challans/:id', updateDeliveryChallan);
+router.delete('/delivery-challans/:id', deleteDeliveryChallan);
 
 // Purchases
 router.get('/purchases', getPurchases);
+router.get('/purchases/:id', getPurchaseById);
 router.post('/purchases', createPurchase);
+router.put('/purchases/:id', updatePurchase);
+router.delete('/purchases/:id', deletePurchase);
 
 // Payments
 router.get('/payments', getPayments);
