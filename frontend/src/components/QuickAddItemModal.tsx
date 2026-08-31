@@ -3,21 +3,22 @@ import { X, PackagePlus } from 'lucide-react';
 import { apiRequest } from '../api';
 
 interface QuickAddItemModalProps {
+  item?: any;
   onSuccess: (newItem: any) => void;
   onClose: () => void;
 }
 
-export const QuickAddItemModal: React.FC<QuickAddItemModalProps> = ({ onSuccess, onClose }) => {
-  const [name, setName] = useState('');
-  const [sku, setSku] = useState('');
-  const [type, setType] = useState('FINISHED_MACHINE');
-  const [unit, setUnit] = useState('Nos');
-  const [hsnSac, setHsnSac] = useState('8436');
-  const [gstRate, setGstRate] = useState(18);
-  const [sellingPrice, setSellingPrice] = useState('');
-  const [purchasePrice, setPurchasePrice] = useState('');
-  const [openingStock, setOpeningStock] = useState('');
-  const [defaultTermsTemplateId, setDefaultTermsTemplateId] = useState('');
+export const QuickAddItemModal: React.FC<QuickAddItemModalProps> = ({ item, onSuccess, onClose }) => {
+  const [name, setName] = useState(item?.name || '');
+  const [sku, setSku] = useState(item?.sku || '');
+  const [type, setType] = useState(item?.type || 'FINISHED_MACHINE');
+  const [unit, setUnit] = useState(item?.unit || 'Nos');
+  const [hsnSac, setHsnSac] = useState(item?.hsnSac || '8436');
+  const [gstRate, setGstRate] = useState(item?.gstRate !== undefined ? item.gstRate : 18);
+  const [sellingPrice, setSellingPrice] = useState(item?.sellingPrice !== undefined ? String(item.sellingPrice) : '');
+  const [purchasePrice, setPurchasePrice] = useState(item?.purchasePrice !== undefined ? String(item.purchasePrice) : '');
+  const [openingStock, setOpeningStock] = useState(item?.currentStock !== undefined ? String(item.currentStock) : '');
+  const [defaultTermsTemplateId, setDefaultTermsTemplateId] = useState(item?.defaultTermsTemplateId || '');
   const [termsTemplates, setTermsTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -39,8 +40,11 @@ export const QuickAddItemModal: React.FC<QuickAddItemModalProps> = ({ onSuccess,
     setError('');
 
     try {
-      const res = await apiRequest('/items', {
-        method: 'POST',
+      const endpoint = item ? `/items/${item.id}` : '/items';
+      const method = item ? 'PUT' : 'POST';
+
+      const res = await apiRequest(endpoint, {
+        method,
         body: JSON.stringify({
           name: name.trim(),
           sku: sku.trim(),
@@ -57,7 +61,7 @@ export const QuickAddItemModal: React.FC<QuickAddItemModalProps> = ({ onSuccess,
 
       onSuccess(res.item);
     } catch (err: any) {
-      setError(err.message || 'Failed to create item');
+      setError(err.message || 'Failed to save item');
     } finally {
       setLoading(false);
     }

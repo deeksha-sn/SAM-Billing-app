@@ -15,6 +15,7 @@ export const SalesInvoices: React.FC = () => {
   const [company, setCompany] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Active Modals State
   const [showEditorModal, setShowEditorModal] = useState(searchParams.get('create') === 'true');
@@ -22,6 +23,11 @@ export const SalesInvoices: React.FC = () => {
   const [viewingInvoice, setViewingInvoice] = useState<any>(null);
   const [printingInvoice, setPrintingInvoice] = useState<any>(null);
   const [sharingInvoice, setSharingInvoice] = useState<any>(null);
+
+  useEffect(() => {
+    loadInvoices();
+    loadCompany();
+  }, []);
 
   if (showEditorModal) {
     return (
@@ -43,18 +49,15 @@ export const SalesInvoices: React.FC = () => {
     );
   }
 
-  useEffect(() => {
-    loadInvoices();
-    loadCompany();
-  }, []);
-
   const loadInvoices = async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const res = await apiRequest('/sales/invoices');
       setInvoices(res.invoices || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error loading invoices:', err);
+      setErrorMsg(err.message || 'Failed to load sales invoices from server');
     } finally {
       setLoading(false);
     }
@@ -175,8 +178,20 @@ export const SalesInvoices: React.FC = () => {
       {/* Invoices List Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-slate-500 text-xs font-bold">
-            Loading invoices...
+          <div className="p-12 text-center text-slate-500 text-xs font-bold flex items-center justify-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+            <span>Loading sales invoices...</span>
+          </div>
+        ) : errorMsg ? (
+          <div className="p-12 text-center space-y-3 bg-red-50/50">
+            <AlertCircle className="w-10 h-10 text-red-500 mx-auto" />
+            <p className="text-red-800 font-bold text-sm">{errorMsg}</p>
+            <button
+              onClick={loadInvoices}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow inline-flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Retry Loading
+            </button>
           </div>
         ) : filteredInvoices.length === 0 ? (
           <div className="p-12 text-center space-y-3">

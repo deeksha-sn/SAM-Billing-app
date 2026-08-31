@@ -18,6 +18,7 @@ export const Quotations: React.FC = () => {
   const [company, setCompany] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Active Modals State
   const [showEditorModal, setShowEditorModal] = useState(searchParams.get('create') === 'true');
@@ -27,6 +28,11 @@ export const Quotations: React.FC = () => {
   const [sharingQuotation, setSharingQuotation] = useState<any>(null);
   const [deletingQuotation, setDeletingQuotation] = useState<any>(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  useEffect(() => {
+    loadQuotations();
+    loadCompany();
+  }, []);
 
   if (showEditorModal) {
     return (
@@ -48,18 +54,15 @@ export const Quotations: React.FC = () => {
     );
   }
 
-  useEffect(() => {
-    loadQuotations();
-    loadCompany();
-  }, []);
-
   const loadQuotations = async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const res = await apiRequest('/quotations');
       setQuotations(res.quotations || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error loading quotations:', err);
+      setErrorMsg(err.message || 'Failed to load quotations from server');
     } finally {
       setLoading(false);
     }

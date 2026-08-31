@@ -12,12 +12,17 @@ export const DeliveryChallans: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [stockSetting, setStockSetting] = useState('YES');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Modals state
   const [editorModalChallan, setEditorModalChallan] = useState<any | null>(null);
   const [viewingChallan, setViewingChallan] = useState<any | null>(null);
   const [deletingChallan, setDeletingChallan] = useState<any | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  useEffect(() => {
+    loadChallans();
+  }, []);
 
   if (editorModalChallan !== null) {
     return (
@@ -33,19 +38,17 @@ export const DeliveryChallans: React.FC = () => {
     );
   }
 
-  useEffect(() => {
-    loadChallans();
-  }, []);
-
   const loadChallans = async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const res = await apiRequest('/delivery-challans');
       setChallans(res.challans || []);
       const sRes = await apiRequest('/settings/system');
       setStockSetting(sRes.settings?.delivery_challan_affects_stock || 'YES');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load delivery challans:', err);
+      setErrorMsg(err.message || 'Failed to load delivery challans from server');
     } finally {
       setLoading(false);
     }

@@ -10,6 +10,7 @@ export const Inventory: React.FC = () => {
   const [boms, setBoms] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'ITEMS' | 'BOM' | 'LEDGER'>('ITEMS');
   const [showCreateItem, setShowCreateItem] = useState(searchParams.get('create') === 'true');
+  const [editingItem, setEditingItem] = useState<any>(null);
   const [showStockModal, setShowStockModal] = useState<any>(null);
 
   // BOM Builder state
@@ -182,12 +183,21 @@ export const Inventory: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-4 text-right">
-                      <button
-                        onClick={() => setShowStockModal(item)}
-                        className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold text-xs rounded-lg border inline-flex items-center gap-1"
-                      >
-                        <Sliders className="w-3.5 h-3.5" /> Adjust Stock
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setEditingItem(item)}
+                          className="p-1.5 text-amber-700 hover:bg-amber-50 rounded-lg transition"
+                          title="Edit Item"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setShowStockModal(item)}
+                          className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold text-xs rounded-lg border inline-flex items-center gap-1"
+                        >
+                          <Sliders className="w-3.5 h-3.5" /> Adjust Stock
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -401,6 +411,17 @@ export const Inventory: React.FC = () => {
           onClose={() => setShowCreateItem(false)}
           onSuccess={() => {
             setShowCreateItem(false);
+            loadItems();
+          }}
+        />
+      )}
+
+      {editingItem && (
+        <QuickAddItemModal
+          item={editingItem}
+          onClose={() => setEditingItem(null)}
+          onSuccess={() => {
+            setEditingItem(null);
             loadItems();
           }}
         />

@@ -11,6 +11,7 @@ export const Purchases: React.FC = () => {
   const [purchases, setPurchases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Modals state
   const [editorModalPurchase, setEditorModalPurchase] = useState<any | null>(
@@ -19,6 +20,10 @@ export const Purchases: React.FC = () => {
   const [viewingPurchase, setViewingPurchase] = useState<any | null>(null);
   const [deletingPurchase, setDeletingPurchase] = useState<any | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  useEffect(() => {
+    loadPurchases();
+  }, []);
 
   if (editorModalPurchase !== null) {
     return (
@@ -34,17 +39,15 @@ export const Purchases: React.FC = () => {
     );
   }
 
-  useEffect(() => {
-    loadPurchases();
-  }, []);
-
   const loadPurchases = async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const res = await apiRequest('/purchases');
       setPurchases(res.purchases || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load purchases:', err);
+      setErrorMsg(err.message || 'Failed to load purchases from server');
     } finally {
       setLoading(false);
     }
