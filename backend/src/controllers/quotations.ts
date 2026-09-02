@@ -10,6 +10,7 @@ export async function getQuotations(req: AuthRequest, res: Response) {
     const quotations = await prisma.quotation.findMany({
       include: {
         party: true,
+        farmer: true,
         items: {
           include: {
             item: true,
@@ -31,6 +32,7 @@ export async function getQuotationById(req: AuthRequest, res: Response) {
       where: { id },
       include: {
         party: true,
+        farmer: true,
         items: {
           include: {
             item: true,
@@ -50,6 +52,7 @@ export async function createQuotation(req: AuthRequest, res: Response) {
   try {
     const {
       partyId,
+      farmerId,
       quotationDate,
       validityDate,
       items,
@@ -83,6 +86,7 @@ export async function createQuotation(req: AuthRequest, res: Response) {
     let rawTotalSgst = 0;
     let rawTotalIgst = 0;
     let rawGrandTotal = 0;
+    let totalTaxableVal = 0;
 
     const processedItems = items.map((line: any) => {
       const qty = Math.max(0, Number(line.quantity) || 1);
@@ -104,7 +108,7 @@ export async function createQuotation(req: AuthRequest, res: Response) {
         isInterState: isInterState,
       });
 
-      rawTotalTaxable += calc.taxableValue;
+      totalTaxableVal += calc.taxableValue;
       rawTotalCgst += calc.cgstAmount;
       rawTotalSgst += calc.sgstAmount;
       rawTotalIgst += calc.igstAmount;
@@ -134,7 +138,7 @@ export async function createQuotation(req: AuthRequest, res: Response) {
     const isRoundOffOn = roundOffEnabled !== false;
     const grandTotal = isRoundOffOn ? Math.round(rawGrandTotal) : Number(rawGrandTotal.toFixed(2));
     const roundOff = isRoundOffOn ? Number((grandTotal - rawGrandTotal).toFixed(2)) : 0;
-    const totalTaxable = rawTotalTaxable;
+    const totalTaxable = totalTaxableVal;
     const totalCgst = rawTotalCgst;
     const totalSgst = rawTotalSgst;
     const totalIgst = rawTotalIgst;
@@ -157,6 +161,7 @@ export async function createQuotation(req: AuthRequest, res: Response) {
           quotationDate: quoDate,
           validityDate: validityDate ? new Date(validityDate) : null,
           partyId: party.id,
+          farmerId: farmerId || null,
           customerStateCode: party.stateCode || '29',
           isInterState: isInterState,
           transportName: transportName ? String(transportName).trim() : null,

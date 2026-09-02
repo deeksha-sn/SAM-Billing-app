@@ -75,6 +75,8 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState('');
   const [selectedPartyId, setSelectedPartyId] = useState('');
   const [selectedParty, setSelectedParty] = useState<any | null>(null);
+  const [selectedFarmerId, setSelectedFarmerId] = useState('');
+  const [selectedFarmer, setSelectedFarmer] = useState<any | null>(null);
 
   // Address & Locations
   const [billingAddress, setBillingAddress] = useState('');
@@ -363,6 +365,7 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
 
     const payload = {
       partyId: selectedPartyId,
+      farmerId: selectedFarmerId || null,
       invoiceDate: docDate,
       purchaseDate: docDate,
       quotationDate: docDate,
@@ -516,6 +519,7 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
                 required={true}
                 partyType={partyTypeFilter as 'CUSTOMER' | 'SUPPLIER'}
                 selectedPartyId={selectedPartyId}
+                selectedFarmerId={selectedFarmerId}
                 parties={parties}
                 onSelectParty={(p) => {
                   if (p) {
@@ -523,6 +527,16 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
                   } else {
                     setSelectedPartyId('');
                     setSelectedParty(null);
+                    setSelectedFarmerId('');
+                    setSelectedFarmer(null);
+                  }
+                }}
+                onSelectFarmer={(f) => {
+                  setSelectedFarmer(f);
+                  setSelectedFarmerId(f ? f.id : '');
+                  if (f) {
+                    const fAddr = [f.name, `Phone: ${f.mobile}`, f.address || f.village, f.district, f.state].filter(Boolean).join(', ');
+                    setDeliveryLocation(fAddr);
                   }
                 }}
                 onPartyCreated={(newP) => {

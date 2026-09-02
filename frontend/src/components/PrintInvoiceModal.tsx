@@ -283,10 +283,21 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, c
 
               <div className="p-2 space-y-0.5 text-[10.5px]">
                 <p className="font-bold text-black uppercase text-[10px] mb-0.5">Ship To / Delivery Location</p>
-                <p className="font-bold text-black text-xs uppercase">{party.name}</p>
-                <p className="text-gray-800">{invoice.deliveryLocation || invoice.deliveryAddress || party.address || party.village}</p>
-                <p className="text-gray-800">{party.taluk ? `${party.taluk}, ` : ''}{party.district ? `${party.district}, ` : ''}{party.state}</p>
-                <p className="text-gray-800 font-semibold">Contact No. : {party.mobile}</p>
+                {invoice.farmer ? (
+                  <>
+                    <p className="font-bold text-black text-xs uppercase">{invoice.farmer.name} <span className="font-normal text-[9.5px] text-gray-700">(Farmer under {party.name})</span></p>
+                    <p className="text-gray-800">{invoice.farmer.address || invoice.farmer.village || 'Farm Address'}</p>
+                    <p className="text-gray-800">{invoice.farmer.taluk ? `${invoice.farmer.taluk}, ` : ''}{invoice.farmer.district ? `${invoice.farmer.district}, ` : ''}{invoice.farmer.state} {invoice.farmer.pincode ? `- ${invoice.farmer.pincode}` : ''}</p>
+                    <p className="text-gray-800 font-semibold">Contact No. : {invoice.farmer.mobile}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-black text-xs uppercase">{party.name}</p>
+                    <p className="text-gray-800">{invoice.deliveryLocation || invoice.deliveryAddress || party.address || party.village}</p>
+                    <p className="text-gray-800">{party.taluk ? `${party.taluk}, ` : ''}{party.district ? `${party.district}, ` : ''}{party.state}</p>
+                    <p className="text-gray-800 font-semibold">Contact No. : {party.mobile}</p>
+                  </>
+                )}
               </div>
             </div>
 

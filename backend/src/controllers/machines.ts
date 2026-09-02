@@ -23,6 +23,7 @@ export async function getMachines(req: AuthRequest, res: Response) {
       where,
       include: {
         party: true,
+        farmer: true,
         machineItem: true,
         invoice: true,
         assignedTechnician: { select: { id: true, name: true, mobile: true } as any },
@@ -50,28 +51,16 @@ export async function getMachineBySerial(req: AuthRequest, res: Response) {
       where: { serialNumber },
       include: {
         party: true,
+        farmer: true,
         machineItem: true,
         invoice: true,
-        assignedTechnician: { select: { id: true, name: true } },
-        services: {
-          include: {
-            parts: { include: { item: true } },
-            assignedTechnician: { select: { name: true } },
-          },
-          orderBy: { serviceDueDate: 'desc' },
-        },
+        assignedTechnician: true,
+        services: { include: { assignedTechnician: true }, orderBy: { serviceDueDate: 'desc' } },
       },
     });
 
-    if (!machine) return res.status(404).json({ error: 'Machine not found' });
-
-    const now = new Date();
-    return res.json({
-      machine: {
-        ...machine,
-        isWarrantyActive: machine.warrantyEnd ? new Date(machine.warrantyEnd) >= now : false,
-      },
-    });
+    if (!machine) return res.status(404).json({ error: 'Machine serial number not found' });
+    return res.json({ machine });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -81,6 +70,7 @@ export async function createMachine(req: AuthRequest, res: Response) {
   try {
     const {
       partyId,
+      farmerId,
       machineItemId,
       model,
       serialNumber,
@@ -115,6 +105,7 @@ export async function createMachine(req: AuthRequest, res: Response) {
     const machine = await prisma.machine.create({
       data: {
         partyId,
+        farmerId: farmerId || null,
         machineItemId,
         model: model || item?.name || 'Agro Machine',
         serialNumber: serialNumber.trim(),
@@ -128,7 +119,7 @@ export async function createMachine(req: AuthRequest, res: Response) {
         location,
         notes,
       },
-      include: { party: true, machineItem: true },
+      include: { party: true, farmer: true, machineItem: true },
     });
 
     return res.status(201).json({ machine });

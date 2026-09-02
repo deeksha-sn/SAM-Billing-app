@@ -239,6 +239,7 @@ export const Parties: React.FC = () => {
             setViewingParty(null);
           }}
           onClose={() => setViewingParty(null)}
+          onPartyUpdated={() => handleOpenView(viewingParty)}
         />
       )}
 

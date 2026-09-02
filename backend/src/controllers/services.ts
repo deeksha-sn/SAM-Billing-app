@@ -69,6 +69,10 @@ export async function getServices(req: AuthRequest, res: Response) {
         { serialNumber: { contains: q } },
         { party: { name: { contains: q } } },
         { party: { mobile: { contains: q } } },
+        { farmer: { name: { contains: q } } },
+        { farmer: { mobile: { contains: q } } },
+        { farmer: { village: { contains: q } } },
+        { farmer: { district: { contains: q } } },
         { machine: { model: { contains: q } } },
       ];
     }
@@ -77,6 +81,7 @@ export async function getServices(req: AuthRequest, res: Response) {
       where,
       include: {
         party: true,
+        farmer: true,
         machine: {
           include: { machineItem: true },
         },
@@ -427,7 +432,7 @@ export async function sendTechnicianDispatchWhatsApp(req: AuthRequest, res: Resp
         serviceDueDate: { gte: targetDate, lt: nextDay },
         status: { notIn: ['CANCELLED'] },
       },
-      include: { party: true, machine: true },
+      include: { party: true, farmer: true, machine: true },
       orderBy: { serviceDueDate: 'asc' },
     });
 
@@ -435,12 +440,18 @@ export async function sendTechnicianDispatchWhatsApp(req: AuthRequest, res: Resp
       return res.status(400).json({ error: `No assigned jobs found for ${technician.name} on ${targetDate.toLocaleDateString('en-IN')}` });
     }
 
-    let message = `TODAY'S SERVICE JOBS\nSmart Agro Machinerys\n\nDate: ${targetDate.toLocaleDateString('en-IN')}\nTechnician: ${technician.name}\n\n`;
+    let message = `*TODAY'S SERVICE JOBS*\n*Smart Agro Machinerys*\n\n📅 Date: ${targetDate.toLocaleDateString('en-IN')}\n👨‍🔧 Technician: ${technician.name}\n\n`;
 
     jobs.forEach((job, idx) => {
       const p = job.party;
-      const addr = [p.address, p.village, p.district].filter(Boolean).join(', ');
-      message += `${idx + 1}. ${p.name}\nMachine: ${job.machine?.model || 'Equipment'}\nSerial: ${job.serialNumber}\nAddress: ${addr}\nPhone: ${p.mobile}\nStatus: ${job.status}\n\n`;
+      const f = job.farmer;
+      const name = f ? `${f.name} (Org: ${p.name})` : p.name;
+      const phone = f?.mobile || p.mobile;
+      const addr = f
+        ? [f.address, f.village, f.district, f.state].filter(Boolean).join(', ')
+        : [p.address, p.village, p.district, p.state].filter(Boolean).join(', ');
+
+      message += `${idx + 1}. *${name}*\n   📱 Phone: ${phone}\n   📍 Location: ${addr}\n   🚜 Machine: ${job.machine?.model || 'Equipment'}\n   🔢 Serial: ${job.serialNumber}\n   📌 Status: ${job.status}\n\n`;
     });
 
     message += `Total Jobs: ${jobs.length}\n\nPlease update job status upon completion.`;

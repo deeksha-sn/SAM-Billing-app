@@ -12,7 +12,7 @@ export async function getDeliveryChallans(req: AuthRequest, res: Response) {
 
     const challans = await prisma.deliveryChallan.findMany({
       where,
-      include: { party: true, items: { include: { item: true } }, invoice: true },
+      include: { party: true, farmer: true, items: { include: { item: true } }, invoice: true },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -27,7 +27,7 @@ export async function getDeliveryChallanById(req: AuthRequest, res: Response) {
     const { id } = req.params;
     const challan = await prisma.deliveryChallan.findUnique({
       where: { id },
-      include: { party: true, items: { include: { item: true } }, invoice: true },
+      include: { party: true, farmer: true, items: { include: { item: true } }, invoice: true },
     });
 
     if (!challan) return res.status(404).json({ error: 'Delivery Challan not found' });
@@ -41,6 +41,7 @@ export async function createDeliveryChallan(req: AuthRequest, res: Response) {
   try {
     const {
       partyId,
+      farmerId,
       challanDate,
       deliveryAddress,
       deliveryLocation,
@@ -79,6 +80,7 @@ export async function createDeliveryChallan(req: AuthRequest, res: Response) {
           financialYear: fy,
           challanDate: cDate,
           partyId: party.id,
+          farmerId: farmerId || null,
           deliveryAddress: deliveryAddress || party.address || '',
           deliveryLocation: deliveryLocation || null,
           contactNumber: contactNumber || party.mobile,

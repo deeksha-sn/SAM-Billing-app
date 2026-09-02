@@ -30,6 +30,14 @@ export async function getParties(req: AuthRequest, res: Response) {
 
     const parties = await prisma.party.findMany({
       where,
+      include: {
+        farmers: {
+          include: {
+            machines: { include: { machineItem: true } },
+          },
+          orderBy: { name: 'asc' },
+        },
+      },
       orderBy: { name: 'asc' },
     });
 
@@ -45,11 +53,18 @@ export async function getPartyById(req: AuthRequest, res: Response) {
     const party = await prisma.party.findUnique({
       where: { id },
       include: {
-        invoices: { take: 10, orderBy: { createdAt: 'desc' } },
-        deliveryChallans: { take: 10, orderBy: { createdAt: 'desc' } },
+        farmers: {
+          include: {
+            machines: { include: { machineItem: true } },
+          },
+          orderBy: { name: 'asc' },
+        },
+        invoices: { take: 10, include: { farmer: true }, orderBy: { createdAt: 'desc' } },
+        quotations: { take: 10, include: { farmer: true }, orderBy: { createdAt: 'desc' } },
+        deliveryChallans: { take: 10, include: { farmer: true }, orderBy: { createdAt: 'desc' } },
         payments: { take: 10, orderBy: { createdAt: 'desc' } },
-        machines: { include: { machineItem: true }, orderBy: { createdAt: 'desc' } },
-        services: { take: 10, orderBy: { serviceDueDate: 'desc' } },
+        machines: { include: { machineItem: true, farmer: true }, orderBy: { createdAt: 'desc' } },
+        services: { take: 10, include: { farmer: true }, orderBy: { serviceDueDate: 'desc' } },
       },
     });
 

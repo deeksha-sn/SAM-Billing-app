@@ -180,7 +180,7 @@ export async function getInvoices(req: AuthRequest, res: Response) {
 
     const invoices = await prisma.invoice.findMany({
       where,
-      include: { party: true, items: { include: { item: true } } },
+      include: { party: true, farmer: true, items: { include: { item: true } } },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -197,6 +197,7 @@ export async function getInvoiceById(req: AuthRequest, res: Response) {
       where: { id },
       include: {
         party: true,
+        farmer: true,
         items: { include: { item: true } },
         createdBy: { select: { name: true, role: true } },
         deliveryChallans: true,
@@ -215,6 +216,7 @@ export async function createInvoice(req: AuthRequest, res: Response) {
   try {
     const {
       partyId,
+      farmerId,
       invoiceDate,
       items,
       paymentMode,
@@ -333,6 +335,7 @@ export async function createInvoice(req: AuthRequest, res: Response) {
           financialYear: fy,
           invoiceDate: invDate,
           partyId: party.id,
+          farmerId: farmerId || null,
           billingAddress: party.address || party.village || '',
           deliveryAddress: deliveryLocation || party.address || party.village || '',
           deliveryLocation: deliveryLocation || null,
@@ -409,11 +412,13 @@ export async function createInvoice(req: AuthRequest, res: Response) {
               where: { serialNumber: pItem.serialNumber.trim() },
               update: {
                 partyId: party.id,
+                farmerId: farmerId || null,
                 invoiceId: createdInvoice.id,
                 saleDate: warStart,
               },
               create: {
                 partyId: party.id,
+                farmerId: farmerId || null,
                 machineItemId: pItem.itemId,
                 model: itemMaster.name,
                 serialNumber: pItem.serialNumber.trim(),

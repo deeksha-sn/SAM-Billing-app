@@ -5,6 +5,7 @@ import { login, getCurrentUser, getUsers, createUser, updateUser } from '../cont
 import { getCompanyProfile, updateCompanyProfile, getSystemSettings, updateSystemSetting, getDocumentNumberConfigs, updateDocumentNumberConfig } from '../controllers/settings';
 import { getTermsTemplates, getTermsTemplateById, createTermsTemplate, updateTermsTemplate, deleteTermsTemplate, duplicateTermsTemplate, setDefaultTermsTemplate } from '../controllers/terms';
 import { getParties, getPartyById, createParty, updateParty, deleteParty, togglePartyStatus } from '../controllers/parties';
+import { getFarmersByParty, getFarmerById, createFarmer, updateFarmer, deleteFarmer } from '../controllers/farmers';
 import { getItems, getItemById, createItem, updateItem, adjustStock, getCategories, createCategory, getUnits, createUnit } from '../controllers/items';
 import { getBOMs, getBOMByFinishedItem, saveBOM } from '../controllers/bom';
 import { getInvoices, getInvoiceById, createInvoice, updateInvoice, cancelInvoice, deleteInvoice } from '../controllers/sales';
@@ -58,6 +59,13 @@ router.post('/parties', createParty);
 router.put('/parties/:id', updateParty);
 router.post('/parties/:id/toggle-status', togglePartyStatus);
 router.delete('/parties/:id', authorize(['ADMIN']), deleteParty);
+
+// Farmers / Sub-parties / Locations
+router.get('/parties/:partyId/farmers', getFarmersByParty);
+router.post('/parties/:partyId/farmers', createFarmer);
+router.get('/farmers/:id', getFarmerById);
+router.put('/farmers/:id', updateFarmer);
+router.delete('/farmers/:id', deleteFarmer);
 
 // Items & Stock
 router.get('/items', getItems);

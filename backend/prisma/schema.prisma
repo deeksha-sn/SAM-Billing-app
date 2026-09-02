@@ -117,6 +117,7 @@ model Party {
   services         ServiceTask[]
   stockMovements   StockMovement[]
   reminderLogs     ServiceReminderLog[]
+  farmers          Farmer[]
 }
 
 model Category {
@@ -249,6 +250,8 @@ model Invoice {
   updatedAt         DateTime  @updatedAt
 
   party            Party              @relation(fields: [partyId], references: [id])
+  farmerId         String?
+  farmer           Farmer?            @relation(fields: [farmerId], references: [id], onDelete: SetNull)
   createdBy        User?              @relation(fields: [createdById], references: [id])
   termsTemplate    TermsTemplate?     @relation(fields: [termsTemplateId], references: [id])
   items            InvoiceItem[]
@@ -308,6 +311,8 @@ model Quotation {
   updatedAt         DateTime  @updatedAt
 
   party Party           @relation(fields: [partyId], references: [id])
+  farmerId String?
+  farmer   Farmer?         @relation(fields: [farmerId], references: [id], onDelete: SetNull)
   items QuotationItem[]
 }
 
@@ -403,6 +408,8 @@ model DeliveryChallan {
   updatedAt        DateTime @updatedAt
 
   party   Party                 @relation(fields: [partyId], references: [id])
+  farmerId String?
+  farmer  Farmer?               @relation(fields: [farmerId], references: [id], onDelete: SetNull)
   invoice Invoice?              @relation(fields: [invoiceId], references: [id])
   items   DeliveryChallanItem[]
 }
@@ -563,6 +570,8 @@ model Machine {
   updatedAt           DateTime  @updatedAt
 
   party              Party                @relation(fields: [partyId], references: [id])
+  farmerId           String?
+  farmer             Farmer?              @relation(fields: [farmerId], references: [id], onDelete: SetNull)
   machineItem        Item                 @relation("MachineItem", fields: [machineItemId], references: [id])
   invoice            Invoice?             @relation(fields: [invoiceId], references: [id])
   assignedTechnician User?                @relation("TechnicianMachines", fields: [assignedTechnicianId], references: [id])
@@ -575,6 +584,7 @@ model ServiceTask {
   serviceNo           String    @unique
   machineId           String
   partyId             String
+  farmerId            String?
   serialNumber        String
   serviceType         String    @default("ROUTINE") // ROUTINE, WARRANTY, BREAKDOWN, COMPLAINT
   serviceDueDate      DateTime
@@ -596,6 +606,7 @@ model ServiceTask {
 
   machine            Machine              @relation(fields: [machineId], references: [id])
   party              Party                @relation(fields: [partyId], references: [id])
+  farmer             Farmer?              @relation(fields: [farmerId], references: [id], onDelete: SetNull)
   assignedTechnician User?                @relation("TechnicianServices", fields: [assignedTechnicianId], references: [id])
   parts              ServicePart[]
   reminderLogs       ServiceReminderLog[]
@@ -618,6 +629,7 @@ model ServiceReminderLog {
   serviceTaskId      String?
   invoiceId          String?
   partyId            String
+  farmerId           String?
   machineId          String?
   reminderType       String    // SERVICE_DUE_TODAY, SERVICE_UPCOMING, SERVICE_OVERDUE, PAYMENT_DUE, PAYMENT_OVERDUE
   recipientPhone     String
@@ -635,7 +647,37 @@ model ServiceReminderLog {
   serviceTask ServiceTask? @relation(fields: [serviceTaskId], references: [id], onDelete: SetNull)
   invoice     Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   party       Party        @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  farmer      Farmer?      @relation(fields: [farmerId], references: [id], onDelete: SetNull)
   machine     Machine?     @relation(fields: [machineId], references: [id], onDelete: SetNull)
+}
+
+model Farmer {
+  id        String   @id @default(uuid())
+  partyId   String
+  name      String
+  mobile    String
+  altMobile String?
+  email     String?
+  address   String?
+  village   String?
+  taluk     String?
+  district  String?
+  state     String   @default("Karnataka")
+  stateCode String   @default("29")
+  pincode   String?
+  gstin     String?
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  party            Party             @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  machines         Machine[]
+  invoices         Invoice[]
+  quotations       Quotation[]
+  deliveryChallans DeliveryChallan[]
+  serviceTasks     ServiceTask[]
+  reminderLogs     ServiceReminderLog[]
 }
 
 model Expense {
