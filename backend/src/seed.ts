@@ -4,7 +4,18 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 export async function seedDatabase() {
-  console.log('Seeding Smart Agro Machinerys database with comprehensive demo data...');
+  console.log('Checking database state for persistent development sample data...');
+
+  // 0. Idempotency Check: Do NOT overwrite, duplicate, or re-seed if invoices & parties already exist!
+  const existingInvoiceCount = await prisma.invoice.count();
+  const existingPartyCount = await prisma.party.count();
+
+  if (existingInvoiceCount >= 10 && existingPartyCount >= 10) {
+    console.log(`Development database already contains data (${existingPartyCount} parties, ${existingInvoiceCount} invoices). Preserving current database state.`);
+    return;
+  }
+
+  console.log('Seeding Smart Agro Machinerys database with persistent development sample data...');
 
   // 1. Company Profile
   await prisma.companyProfile.upsert({
@@ -96,8 +107,13 @@ export async function seedDatabase() {
     update: {},
     create: { name: 'Agricultural Machines', description: 'Finished farm machinery' },
   });
+  const catSpares = await prisma.category.upsert({
+    where: { name: 'Motors & Spares' },
+    update: {},
+    create: { name: 'Motors & Spares', description: 'Electric motors and spare parts' },
+  });
 
-  // 5. Items / Products (10 Items)
+  // 5. Items / Products (20+ Items)
   const itemsData = [
     { sku: 'CC-01', name: 'Heavy Duty Chaff Cutter 2HP', type: 'FINISHED_MACHINE', hsnSac: '8436', gstRate: 18.0, purchasePrice: 22000, sellingPrice: 45000, currentStock: 15, unit: 'Nos' },
     { sku: 'MM-400S', name: 'Milking Machine Double Bucket 400S', type: 'FINISHED_MACHINE', hsnSac: '8434', gstRate: 12.0, purchasePrice: 38000, sellingPrice: 65000, currentStock: 10, unit: 'Nos' },
@@ -109,6 +125,16 @@ export async function seedDatabase() {
     { sku: 'LIN-RUB', name: 'Rubber Liner Set (4 Pcs)', type: 'SPARE_PART', hsnSac: '4016', gstRate: 18.0, purchasePrice: 480, sellingPrice: 850, currentStock: 50, unit: 'Sets' },
     { sku: 'PMP-300', name: 'Oil Free Vacuum Pump 300L', type: 'COMPONENT', hsnSac: '8414', gstRate: 18.0, purchasePrice: 9500, sellingPrice: 14500, currentStock: 12, unit: 'Nos' },
     { sku: 'CC-MINI', name: 'Mini Portable Chaff Cutter 1.5HP', type: 'FINISHED_MACHINE', hsnSac: '8436', gstRate: 12.0, purchasePrice: 16500, sellingPrice: 28000, currentStock: 8, unit: 'Nos' },
+    { sku: 'CUL-3TY', name: 'Tractor Cultivator 3 Tyne', type: 'FINISHED_MACHINE', hsnSac: '8432', gstRate: 12.0, purchasePrice: 14000, sellingPrice: 22000, currentStock: 6, unit: 'Nos' },
+    { sku: 'HAR-BLD', name: 'Combine Harvester Blade Heavy', type: 'SPARE_PART', hsnSac: '8208', gstRate: 18.0, purchasePrice: 320, sellingPrice: 580, currentStock: 45, unit: 'Nos' },
+    { sku: 'OIL-SEL', name: 'High Temperature Oil Seal Set', type: 'SPARE_PART', hsnSac: '8484', gstRate: 18.0, purchasePrice: 120, sellingPrice: 250, currentStock: 80, unit: 'Sets' },
+    { sku: 'BRG-6204', name: 'Heavy Duty Ball Bearing 6204', type: 'SPARE_PART', hsnSac: '8482', gstRate: 18.0, purchasePrice: 180, sellingPrice: 340, currentStock: 75, unit: 'Nos' },
+    { sku: 'VBLT-B42', name: 'Industrial V-Belt B42', type: 'SPARE_PART', hsnSac: '4010', gstRate: 18.0, purchasePrice: 220, sellingPrice: 420, currentStock: 55, unit: 'Nos' },
+    { sku: 'GAG-100', name: 'Vacuum Pressure Gauge 100 PSI', type: 'SPARE_PART', hsnSac: '9026', gstRate: 18.0, purchasePrice: 650, sellingPrice: 1200, currentStock: 25, unit: 'Nos' },
+    { sku: 'STR-SS', name: 'Stainless Steel Milk Strainer', type: 'EQUIPMENT', hsnSac: '7323', gstRate: 12.0, purchasePrice: 850, sellingPrice: 1450, currentStock: 35, unit: 'Nos' },
+    { sku: 'SLR-CHG', name: 'Solar Fence Charger 12V', type: 'FINISHED_MACHINE', hsnSac: '8543', gstRate: 12.0, purchasePrice: 6200, sellingPrice: 9800, currentStock: 14, unit: 'Nos' },
+    { sku: 'BRS-CUT', name: 'Petrol Brush Cutter 52cc', type: 'FINISHED_MACHINE', hsnSac: '8467', gstRate: 18.0, purchasePrice: 9800, sellingPrice: 16500, currentStock: 9, unit: 'Nos' },
+    { sku: 'OIL-4T', name: 'Agro Engine Oil 4T 1 Litre', type: 'SPARE_PART', hsnSac: '2710', gstRate: 18.0, purchasePrice: 280, sellingPrice: 480, currentStock: 90, unit: 'Cans' },
   ];
 
   const dbItems: any[] = [];
@@ -133,8 +159,9 @@ export async function seedDatabase() {
     dbItems.push(item);
   }
 
-  // 6. Parties (10 Parties - Customers, Suppliers, Dealers across KA, MH, TN)
+  // 6. Parties (20 Parties - 10 Customers + 10 Suppliers across KA, MH, TN)
   const partiesData = [
+    // Customers (10)
     { name: 'Akshayakalpa Farms & Foods Pvt Ltd', type: 'CUSTOMER', customerType: 'BUSINESS', mobile: '9620409800', address: 'Tiptur Road, Dairy Division', state: 'Karnataka', stateCode: '29', pincode: '572201', gstin: '29AICA4264B1ZU' },
     { name: 'Sahyadri Agro Producers Co-op', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9845011999', address: 'APMC Yard, Main Road', state: 'Karnataka', stateCode: '29', pincode: '577201', gstin: '29AAACS9876K1Z1' },
     { name: 'Kaveri Milk Dairy & Farm', type: 'CUSTOMER', customerType: 'BUSINESS', mobile: '9741033777', address: 'Bypass Road, Dairy Circle', state: 'Karnataka', stateCode: '29', pincode: '573201', gstin: '29AABCK1122M1Z3' },
@@ -142,9 +169,21 @@ export async function seedDatabase() {
     { name: 'Coimbatore Farm Supplies', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9443077666', address: 'Trichy Road, Coimbatore', state: 'Tamil Nadu', stateCode: '33', pincode: '641018', gstin: '33AAACC9988P1Z7' },
     { name: 'Vijayanagar Agro Agencies', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9448055444', address: 'Station Road, Hospet', state: 'Karnataka', stateCode: '29', pincode: '583201', gstin: '29AABCV7766R1Z9' },
     { name: 'Sri Lakshmi Dairy Farm', type: 'CUSTOMER', customerType: 'FARMER', mobile: '9535055555', address: 'Farm House, Mandya Road', state: 'Karnataka', stateCode: '29', pincode: '571401', gstin: '' },
+    { name: 'Malnad Farmers Association', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9844077888', address: 'Main Road, Chikkamagaluru', state: 'Karnataka', stateCode: '29', pincode: '577101', gstin: '29AAACM4455Q1Z2' },
+    { name: 'Krishna Valley Dairy Farm', type: 'CUSTOMER', customerType: 'BUSINESS', mobile: '9823066555', address: 'Sangli Road, Miraj', state: 'Maharashtra', stateCode: '27', pincode: '416410', gstin: '27AAACK1122S1Z4' },
+    { name: 'Salem Farm Machinery Hub', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9442033444', address: 'Bypass Highway, Salem', state: 'Tamil Nadu', stateCode: '33', pincode: '636004', gstin: '33AAACS5566T1Z6' },
+
+    // Suppliers (10)
     { name: 'Bharat Machinery & Motors', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9880099887', address: 'Gokul Road, Hubli', state: 'Karnataka', stateCode: '29', pincode: '580030', gstin: '29AAACB1122D1Z4' },
     { name: 'Karnataka Agro Spares Ltd', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9844088111', address: 'Peenya Industrial Area, Bangalore', state: 'Karnataka', stateCode: '29', pincode: '560058', gstin: '29AAACK3344E1Z6' },
     { name: 'Deccan Dairy Equipment Co', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9823077111', address: 'MIDC Area, Pune', state: 'Maharashtra', stateCode: '27', pincode: '411026', gstin: '27AAACD7788F1Z8' },
+    { name: 'Kirloskar Oil Engines Ltd', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9822011223', address: 'Laxmanrao Kirloskar Road, Pune', state: 'Maharashtra', stateCode: '27', pincode: '411003', gstin: '27AAACK0011G1Z1' },
+    { name: 'Southern Rubber Products', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9443022334', address: 'Industrial Estate, Madurai', state: 'Tamil Nadu', stateCode: '33', pincode: '625018', gstin: '33AAACS2233H1Z3' },
+    { name: 'Bangalore Precision Hydraulics', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9845033445', address: 'Bommasandra Industrial Area, Bangalore', state: 'Karnataka', stateCode: '29', pincode: '560099', gstin: '29AAACB4455I1Z5' },
+    { name: 'Apex Motors & Components', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9886044556', address: 'Belgaum Industrial Zone, Belgaum', state: 'Karnataka', stateCode: '29', pincode: '590011', gstin: '29AAACA6677J1Z7' },
+    { name: 'National Steel & Sheet Works', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9844055667', address: 'Bhadravathi Steel Town', state: 'Karnataka', stateCode: '29', pincode: '577301', gstin: '29AAACN8899K1Z9' },
+    { name: 'Coimbatore Foundry & Castings', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9443066778', address: 'Ganapathy Industrial Post, Coimbatore', state: 'Tamil Nadu', stateCode: '33', pincode: '641006', gstin: '33AAACC1122L1Z2' },
+    { name: 'West Coast Agro Accessories', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9822077889', address: 'Thane Belapur Road, Navi Mumbai', state: 'Maharashtra', stateCode: '27', pincode: '400705', gstin: '27AAACW3344M1Z4' },
   ];
 
   const dbParties: any[] = [];
@@ -299,6 +338,7 @@ export async function seedDatabase() {
     { no: 'SAM-26-27-0010', partyIndex: 1, farmerIndex: 5, itemIndex: 9, qty: 1, rate: 28000, gstRate: 12, isInter: false, paid: 15000, status: 'PARTIALLY_PAID', mode: 'CASH' },
   ];
 
+  const dbInvoices: any[] = [];
   for (const invDef of invoicesData) {
     const party = dbParties[invDef.partyIndex];
     const farmer = invDef.farmerIndex !== null ? dbFarmers[invDef.farmerIndex] : null;
@@ -315,7 +355,7 @@ export async function seedDatabase() {
       const grand = taxable + taxTotal;
       const bal = Math.max(0, grand - invDef.paid);
 
-      await prisma.invoice.create({
+      existingInv = await prisma.invoice.create({
         data: {
           invoiceNumber: invDef.no,
           financialYear: '2026-2027',
@@ -356,7 +396,25 @@ export async function seedDatabase() {
           },
         },
       });
+
+      // Explicit Payment records for paid/partial invoices (10 Payments)
+      if (invDef.paid > 0) {
+        await prisma.payment.create({
+          data: {
+            receiptNo: `PAY-INV-${invDef.no.substring(10)}`,
+            financialYear: '2026-2027',
+            paymentType: 'CUSTOMER_PAYMENT',
+            partyId: party.id,
+            amount: invDef.paid,
+            paymentMode: invDef.mode,
+            date: existingInv.invoiceDate,
+            referenceNo: `REF-${invDef.no}`,
+            notes: `Payment received for invoice ${invDef.no}`,
+          },
+        });
+      }
     }
+    dbInvoices.push(existingInv);
   }
 
   // 11. Quotations (10 Quotations)
@@ -485,20 +543,20 @@ export async function seedDatabase() {
 
   // 13. Purchases (10 Purchases from Suppliers)
   const purchasesData = [
-    { no: 'PUR-26-27-0001', supplierIndex: 7, itemIndex: 2, qty: 10, rate: 5800, gstRate: 18, isInter: false, paid: 68440, status: 'PAID' },
-    { no: 'PUR-26-27-0002', supplierIndex: 7, itemIndex: 8, qty: 5, rate: 9500, gstRate: 18, isInter: false, paid: 56050, status: 'PAID' },
-    { no: 'PUR-26-27-0003', supplierIndex: 8, itemIndex: 3, qty: 50, rate: 450, gstRate: 18, isInter: false, paid: 26550, status: 'PAID' },
-    { no: 'PUR-26-27-0004', supplierIndex: 8, itemIndex: 6, qty: 20, rate: 1500, gstRate: 18, isInter: false, paid: 35400, status: 'PAID' },
-    { no: 'PUR-26-27-0005', supplierIndex: 9, itemIndex: 1, qty: 5, rate: 38000, gstRate: 12, isInter: true, paid: 212800, status: 'PAID' },
-    { no: 'PUR-26-27-0006', supplierIndex: 9, itemIndex: 7, qty: 30, rate: 480, gstRate: 18, isInter: true, paid: 16992, status: 'PAID' },
-    { no: 'PUR-26-27-0007', supplierIndex: 7, itemIndex: 0, qty: 5, rate: 22000, gstRate: 18, isInter: false, paid: 129800, status: 'PAID' },
-    { no: 'PUR-26-27-0008', supplierIndex: 8, itemIndex: 4, qty: 10, rate: 2800, gstRate: 12, isInter: false, paid: 31360, status: 'PAID' },
-    { no: 'PUR-26-27-0009', supplierIndex: 9, itemIndex: 5, qty: 15, rate: 2400, gstRate: 12, isInter: true, paid: 40320, status: 'PAID' },
-    { no: 'PUR-26-27-0010', supplierIndex: 7, itemIndex: 9, qty: 4, rate: 16500, gstRate: 12, isInter: false, paid: 73920, status: 'PAID' },
+    { no: 'PUR-26-27-0001', supplierIndex: 10, itemIndex: 2, qty: 10, rate: 5800, gstRate: 18, isInter: false, paid: 68440, status: 'PAID' },
+    { no: 'PUR-26-27-0002', supplierIndex: 10, itemIndex: 8, qty: 5, rate: 9500, gstRate: 18, isInter: false, paid: 56050, status: 'PAID' },
+    { no: 'PUR-26-27-0003', supplierIndex: 11, itemIndex: 3, qty: 50, rate: 450, gstRate: 18, isInter: false, paid: 26550, status: 'PAID' },
+    { no: 'PUR-26-27-0004', supplierIndex: 11, itemIndex: 6, qty: 20, rate: 1500, gstRate: 18, isInter: false, paid: 35400, status: 'PAID' },
+    { no: 'PUR-26-27-0005', supplierIndex: 12, itemIndex: 1, qty: 5, rate: 38000, gstRate: 12, isInter: true, paid: 212800, status: 'PAID' },
+    { no: 'PUR-26-27-0006', supplierIndex: 12, itemIndex: 7, qty: 30, rate: 480, gstRate: 18, isInter: true, paid: 16992, status: 'PAID' },
+    { no: 'PUR-26-27-0007', supplierIndex: 10, itemIndex: 0, qty: 5, rate: 22000, gstRate: 18, isInter: false, paid: 129800, status: 'PAID' },
+    { no: 'PUR-26-27-0008', supplierIndex: 11, itemIndex: 4, qty: 10, rate: 2800, gstRate: 12, isInter: false, paid: 31360, status: 'PAID' },
+    { no: 'PUR-26-27-0009', supplierIndex: 12, itemIndex: 5, qty: 15, rate: 2400, gstRate: 12, isInter: true, paid: 40320, status: 'PAID' },
+    { no: 'PUR-26-27-0010', supplierIndex: 10, itemIndex: 9, qty: 4, rate: 16500, gstRate: 12, isInter: false, paid: 73920, status: 'PAID' },
   ];
 
   for (const pDef of purchasesData) {
-    const supplier = dbParties[pDef.supplierIndex];
+    const supplier = dbParties[pDef.supplierIndex] || dbParties[10];
     const item = dbItems[pDef.itemIndex];
     if (!supplier || !item) continue;
 
