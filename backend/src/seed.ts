@@ -40,7 +40,7 @@ export async function seedDatabase() {
   const officePass = await bcrypt.hash('office123', 10);
   const techPass = await bcrypt.hash('tech123', 10);
 
-  const adminUser = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { username: 'admin' },
     update: {},
     create: {
@@ -52,7 +52,7 @@ export async function seedDatabase() {
     },
   });
 
-  const officeUser = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { username: 'office' },
     update: {},
     create: {
@@ -95,11 +95,6 @@ export async function seedDatabase() {
     where: { name: 'Agricultural Machines' },
     update: {},
     create: { name: 'Agricultural Machines', description: 'Finished farm machinery' },
-  });
-  const catSpares = await prisma.category.upsert({
-    where: { name: 'Motors & Spares' },
-    update: {},
-    create: { name: 'Motors & Spares', description: 'Electric motors and spare parts' },
   });
 
   // 5. Items / Products (10 Items)
@@ -290,14 +285,14 @@ export async function seedDatabase() {
     }
   }
 
-  // 10. Sales Invoices (10 Invoices: Paid, Partially Paid, Unpaid, Intra & Inter State)
+  // 10. Sales Invoices (10 Invoices)
   const invoicesData = [
     { no: 'SAM-26-27-0001', partyIndex: 0, farmerIndex: 0, itemIndex: 0, qty: 1, rate: 45000, gstRate: 18, isInter: false, paid: 53100, status: 'PAID', mode: 'BANK TRANSFER' },
     { no: 'SAM-26-27-0002', partyIndex: 0, farmerIndex: 1, itemIndex: 1, qty: 1, rate: 65000, gstRate: 12, isInter: false, paid: 72800, status: 'PAID', mode: 'NEFT' },
     { no: 'SAM-26-27-0003', partyIndex: 1, farmerIndex: 4, itemIndex: 2, qty: 2, rate: 8500, gstRate: 18, isInter: false, paid: 10000, status: 'PARTIALLY_PAID', mode: 'UPI' },
     { no: 'SAM-26-27-0004', partyIndex: 2, farmerIndex: 6, itemIndex: 4, qty: 3, rate: 4500, gstRate: 12, isInter: false, paid: 0, status: 'UNPAID', mode: 'CREDIT' },
-    { no: 'SAM-26-27-0005', partyIndex: 3, farmerIndex: null, itemIndex: 0, qty: 2, rate: 45000, gstRate: 18, isInter: true, paid: 106200, status: 'PAID', mode: 'RTGS' }, // MH Inter-State
-    { no: 'SAM-26-27-0006', partyIndex: 4, farmerIndex: null, itemIndex: 1, qty: 1, rate: 65000, gstRate: 12, isInter: true, paid: 72800, status: 'PAID', mode: 'BANK TRANSFER' }, // TN Inter-State
+    { no: 'SAM-26-27-0005', partyIndex: 3, farmerIndex: null, itemIndex: 0, qty: 2, rate: 45000, gstRate: 18, isInter: true, paid: 106200, status: 'PAID', mode: 'RTGS' },
+    { no: 'SAM-26-27-0006', partyIndex: 4, farmerIndex: null, itemIndex: 1, qty: 1, rate: 65000, gstRate: 12, isInter: true, paid: 72800, status: 'PAID', mode: 'BANK TRANSFER' },
     { no: 'SAM-26-27-0007', partyIndex: 5, farmerIndex: null, itemIndex: 3, qty: 10, rate: 750, gstRate: 18, isInter: false, paid: 8850, status: 'PAID', mode: 'CASH' },
     { no: 'SAM-26-27-0008', partyIndex: 6, farmerIndex: 8, itemIndex: 5, qty: 2, rate: 3800, gstRate: 12, isInter: false, paid: 8512, status: 'PAID', mode: 'UPI' },
     { no: 'SAM-26-27-0009', partyIndex: 0, farmerIndex: 2, itemIndex: 6, qty: 2, rate: 2400, gstRate: 18, isInter: false, paid: 0, status: 'UNPAID', mode: 'CREDIT' },
@@ -590,27 +585,4 @@ export async function seedDatabase() {
   }
 
   console.log('Seeding Smart Agro Machinerys database completed successfully!');
-  console.log('====================================================');
-  console.log(`- Seeded ${dbItems.length} Products & Spares`);
-  console.log(`- Seeded ${dbParties.length} Parties (Customers, Suppliers, Dealers)`);
-  console.log(`- Seeded ${dbFarmers.length} Farmers / Sub-Contacts`);
-  console.log(`- Seeded ${dbMachines.length} Machine Serial Numbers`);
-  console.log(`- Seeded 10 Service Tasks (Today, Overdue, Upcoming, Completed)`);
-  console.log(`- Seeded 10 Sales Invoices (Paid, Partial, Unpaid, Intra & Inter State)`);
-  console.log(`- Seeded 10 Quotations`);
-  console.log(`- Seeded 10 Delivery Challans`);
-  console.log(`- Seeded 10 Purchase Records`);
-  console.log(`- Seeded 10 Expense Records`);
-  console.log('====================================================');
-}
-
-if (require.main === module) {
-  seedDatabase()
-    .catch((e) => {
-      console.error(e);
-      process.exit(1);
-    })
-    .finally(async () => {
-      await prisma.$disconnect();
-    });
 }

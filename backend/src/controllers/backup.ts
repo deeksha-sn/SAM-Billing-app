@@ -160,6 +160,7 @@ export async function resetDemoData(req: AuthRequest, res: Response) {
       prisma.bOMItem.deleteMany(),
       prisma.bOMHeader.deleteMany(),
       prisma.expense.deleteMany(),
+      prisma.farmer.deleteMany(),
       prisma.party.deleteMany(),
       prisma.item.deleteMany(),
       prisma.category.deleteMany(),

@@ -20,6 +20,13 @@ app.get('/api/health', (req, res) => {
 // API Routes
 app.use('/api/v1', apiRouter);
 
-app.listen(Number(PORT), '0.0.0.0', () => {
+import { seedDatabase } from './seed';
+
+app.listen(Number(PORT), '0.0.0.0', async () => {
   console.log(`Smart Agro Machinerys Backend API running on http://localhost:${PORT}`);
+  try {
+    await seedDatabase();
+  } catch (err) {
+    console.error('Failed to seed database on startup:', err);
+  }
 });
