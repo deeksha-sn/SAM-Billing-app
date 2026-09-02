@@ -12,14 +12,32 @@ export const WhatsAppCustomerModal: React.FC<WhatsAppCustomerModalProps> = ({
   onClose,
 }) => {
   const party = service.party || {};
+  const farmer = service.farmer || null;
   const machine = service.machine || {};
 
-  const cleanPhone = party.mobile ? party.mobile.replace(/\D/g, '') : '';
+  const recipientName = farmer?.name || party.name || 'Customer';
+  const recipientPhone = farmer?.mobile || party.mobile || '';
+  const location = farmer
+    ? [farmer.village, farmer.district].filter(Boolean).join(', ')
+    : [party.village, party.district].filter(Boolean).join(', ');
+
+  const cleanPhone = recipientPhone ? recipientPhone.replace(/\D/g, '') : '';
   const formattedPhone = cleanPhone.length === 10 ? '91' + cleanPhone : cleanPhone;
 
   const dueDateStr = new Date(service.serviceDueDate).toLocaleDateString('en-IN');
 
-  const defaultMessage = `Dear ${party.name || 'Customer'},\n\nThis is a service reminder from Smart Agro Machinerys.\n\nMachine: ${machine.model || 'Equipment'}\nSerial No: ${service.serialNumber || 'N/A'}\nService Due Date: ${dueDateStr}\n\nYour machine service is due today.\n\nPlease contact us to schedule your service.\n\nSmart Agro Machinerys\nPhone: +91 9844011223\nThank you!`;
+  const defaultMessage = `Hello ${recipientName},
+
+This is a service reminder from Smart Agro Machinerys.
+
+Your ${machine.model || 'Milking Machine'} (Serial No: ${service.serialNumber || 'N/A'}) is due for service today.
+
+Location: ${location || 'Karnataka'}.
+
+Please contact us to schedule the service.
+
+Thank you,
+Smart Agro Machinerys`;
 
   const [messageText, setMessageText] = useState(defaultMessage);
   const [sendingApi, setSendingApi] = useState(false);

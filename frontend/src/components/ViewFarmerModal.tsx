@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Phone, MapPin, Wrench, FileText, Truck, RefreshCw, Edit, Trash2, Calendar, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { X, User, Phone, MapPin, Wrench, FileText, Truck, RefreshCw, Edit, Trash2, Calendar, ShieldCheck, AlertTriangle, Plus } from 'lucide-react';
 import { apiRequest } from '../api';
+import { AssignMachineModal } from './AssignMachineModal';
 
 interface ViewFarmerModalProps {
   farmerId: string;
@@ -13,6 +14,7 @@ export const ViewFarmerModal: React.FC<ViewFarmerModalProps> = ({ farmerId, onEd
   const [farmer, setFarmer] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'MACHINES' | 'INVOICES' | 'QUOTATIONS' | 'CHALLANS' | 'SERVICES'>('MACHINES');
+  const [showAssignMachine, setShowAssignMachine] = useState(false);
 
   useEffect(() => {
     loadFarmer();
@@ -177,9 +179,19 @@ export const ViewFarmerModal: React.FC<ViewFarmerModalProps> = ({ farmerId, onEd
             {/* TAB 1: ASSIGNED MACHINES */}
             {activeTab === 'MACHINES' && (
               <div className="space-y-3">
+                <div className="flex justify-between items-center bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <span className="font-extrabold text-amber-300 text-xs">MACHINES & SERIAL NUMBERS</span>
+                  <button
+                    onClick={() => setShowAssignMachine(true)}
+                    className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-extrabold text-xs flex items-center gap-1 shadow transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> + Assign Machine
+                  </button>
+                </div>
+
                 {farmer.machines?.length === 0 ? (
                   <div className="p-8 text-center bg-slate-950 border border-slate-800 rounded-2xl text-slate-400 font-medium">
-                    No machines assigned to {farmer.name} yet.
+                    No machines assigned to {farmer.name} yet. Click "+ Assign Machine" above to register equipment.
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -297,6 +309,18 @@ export const ViewFarmerModal: React.FC<ViewFarmerModalProps> = ({ farmerId, onEd
 
         </div>
       </div>
+
+      {/* ASSIGN MACHINE MODAL */}
+      {showAssignMachine && (
+        <AssignMachineModal
+          farmer={farmer}
+          onSuccess={() => {
+            setShowAssignMachine(false);
+            loadFarmer();
+          }}
+          onClose={() => setShowAssignMachine(false)}
+        />
+      )}
     </div>
   );
 };

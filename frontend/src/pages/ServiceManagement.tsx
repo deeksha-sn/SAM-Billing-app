@@ -374,20 +374,41 @@ export const ServiceManagement: React.FC = () => {
 
                 {/* Main Content Grid: Customer & Machine */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
-                  {/* Customer Info */}
+                  {/* Customer / Farmer Info */}
                   <div className="space-y-1">
-                    <div className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Customer Details</div>
-                    <div className="font-extrabold text-sm text-gray-900">{p.name || 'N/A'}</div>
-                    <div className="flex items-center gap-1.5 text-gray-700">
-                      <Phone className="w-3.5 h-3.5 text-emerald-700" />
-                      <a href={`tel:${p.mobile}`} className="font-mono font-bold text-emerald-900 hover:underline">
-                        {p.mobile}
-                      </a>
-                    </div>
-                    <div className="flex items-start gap-1.5 text-gray-600 pt-0.5">
-                      <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
-                      <span>{[p.address, p.village, p.district].filter(Boolean).join(', ') || 'No address'}</span>
-                    </div>
+                    <div className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Customer / Farmer Details</div>
+                    {srv.farmer ? (
+                      <>
+                        <div className="font-extrabold text-sm text-gray-900 flex items-center gap-1.5">
+                          <span>👨‍🌾 {srv.farmer.name}</span>
+                          <span className="text-[10px] text-gray-500 font-normal">(under {p.name})</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-gray-700">
+                          <Phone className="w-3.5 h-3.5 text-emerald-700" />
+                          <a href={`tel:${srv.farmer.mobile}`} className="font-mono font-bold text-emerald-900 hover:underline">
+                            {srv.farmer.mobile}
+                          </a>
+                        </div>
+                        <div className="flex items-start gap-1.5 text-gray-600 pt-0.5">
+                          <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                          <span>{[srv.farmer.address || srv.farmer.village, srv.farmer.district, srv.farmer.state].filter(Boolean).join(', ')}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="font-extrabold text-sm text-gray-900">{p.name || 'N/A'}</div>
+                        <div className="flex items-center gap-1.5 text-gray-700">
+                          <Phone className="w-3.5 h-3.5 text-emerald-700" />
+                          <a href={`tel:${p.mobile}`} className="font-mono font-bold text-emerald-900 hover:underline">
+                            {p.mobile}
+                          </a>
+                        </div>
+                        <div className="flex items-start gap-1.5 text-gray-600 pt-0.5">
+                          <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                          <span>{[p.address, p.village, p.district].filter(Boolean).join(', ') || 'No address'}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Machine Info */}
