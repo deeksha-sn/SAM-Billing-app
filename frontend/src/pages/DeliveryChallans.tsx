@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../api';
-import { Truck, Plus, Eye, Edit, Trash2, Search } from 'lucide-react';
+import { Truck, Plus, Eye, Edit, Trash2, Search, Printer, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ViewChallanModal } from '../components/ViewChallanModal';
 import { DeleteChallanModal } from '../components/DeleteChallanModal';
@@ -167,27 +167,43 @@ export const DeliveryChallans: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => setViewingChallan(dc)}
                           title="View Challan"
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                          className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold rounded-lg text-[11px] flex items-center gap-1 transition"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3.5 h-3.5" /> View
                         </button>
                         <button
                           onClick={() => setEditorModalChallan(dc)}
                           title="Edit Challan"
-                          className="p-1.5 text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-lg text-[11px] flex items-center gap-1 transition"
                         >
-                          <Edit className="w-4 h-4" />
+                          <Edit className="w-3.5 h-3.5" /> Edit
                         </button>
+                        <button
+                          onClick={() => setViewingChallan(dc)}
+                          title="Print Challan A4"
+                          className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded-lg text-[11px] flex items-center gap-1 transition"
+                        >
+                          <Printer className="w-3.5 h-3.5" /> Print
+                        </button>
+                        <a
+                          href={`https://wa.me/?text=${encodeURIComponent(`Smart Agro Machinerys\n\nDelivery Challan: ${dc.challanNumber}\nCustomer: ${dc.party?.name || 'Customer'}\nFarmer/Delivery To: ${dc.farmer?.name || dc.party?.name || 'Customer'}\nMachine: ${dc.items?.[0]?.itemName || 'Equipment'}\nQuantity: ${dc.items?.[0]?.quantity || 1}\nDelivery Location: ${dc.deliveryLocation || dc.deliveryAddress || 'N/A'}\n\nThank you,\nSmart Agro Machinerys`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Share via WhatsApp"
+                          className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-lg text-[11px] flex items-center gap-1 transition"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" /> Share
+                        </a>
                         <button
                           onClick={() => setDeletingChallan(dc)}
                           title="Delete Challan"
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition"
+                          className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-lg text-[11px] flex items-center gap-1 transition"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" /> Delete
                         </button>
                       </div>
                     </td>

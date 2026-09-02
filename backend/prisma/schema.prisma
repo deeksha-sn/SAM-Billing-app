@@ -421,9 +421,12 @@ model DeliveryChallanItem {
   itemId            String
   itemName          String
   description       String?
+  hsnSac            String?
   unit              String
   quantity          Float
   freeQuantity      Float   @default(0)
+  serialNumber      String?
+  notes             String?
 
   deliveryChallan DeliveryChallan @relation(fields: [deliveryChallanId], references: [id], onDelete: Cascade)
   item            Item            @relation(fields: [itemId], references: [id])

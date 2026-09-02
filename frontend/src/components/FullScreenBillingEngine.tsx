@@ -394,6 +394,8 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
         unit: line.unit,
         quantity: Number(line.quantity) || 1,
         freeQuantity: Number(line.freeQuantity) || 0,
+        serialNumber: line.serialNumber || null,
+        notes: line.notes || null,
         rate: Number(line.rate) || 0,
         discountPercent: Number(line.discountPercent) || 0,
         discountAmount: Number(line.discountAmount) || 0,
@@ -703,6 +705,7 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
                   <th className="p-3 w-24">HSN/SAC</th>
                   <th className="p-3 w-20 text-center">Qty</th>
                   <th className="p-3 w-20 text-center">Free</th>
+                  {isChallan && <th className="p-3 w-32 text-center text-amber-400">Serial Number</th>}
                   <th className="p-3 w-28 text-right">Price (₹)</th>
                   <th className="p-3 w-24 text-right">Disc %</th>
                   <th className="p-3 w-28 text-center">GST %</th>
@@ -774,6 +777,19 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
                         className="w-full p-2 bg-slate-900 border border-slate-600 rounded-xl font-bold text-center text-slate-400"
                       />
                     </td>
+
+                    {/* Serial Number (DC Mode) */}
+                    {isChallan && (
+                      <td className="p-2">
+                        <input
+                          type="text"
+                          value={row.serialNumber || ''}
+                          onChange={(e) => handleFieldChange(idx, 'serialNumber', e.target.value)}
+                          placeholder="e.g. MM-001"
+                          className="w-full p-2 bg-slate-900 border border-slate-600 rounded-xl font-mono font-extrabold text-amber-300 text-xs"
+                        />
+                      </td>
+                    )}
 
                     {/* Price / Unit */}
                     <td className="p-2">

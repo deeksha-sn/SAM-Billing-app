@@ -100,9 +100,12 @@ export async function createDeliveryChallan(req: AuthRequest, res: Response) {
               itemId: i.itemId,
               itemName: i.itemName || 'Item',
               description: i.description || null,
+              hsnSac: i.hsnSac || null,
               unit: i.unit || 'Nos',
               quantity: Number(i.quantity) || 1,
               freeQuantity: Number(i.freeQuantity) || 0,
+              serialNumber: i.serialNumber || null,
+              notes: i.notes || null,
             })),
           },
         },
@@ -155,13 +158,18 @@ export async function updateDeliveryChallan(req: AuthRequest, res: Response) {
     const {
       challanNumber,
       partyId,
+      farmerId,
       challanDate,
       deliveryAddress,
+      deliveryLocation,
       contactNumber,
       vehicleNumber,
       transporter,
+      transportName,
       reason,
       refOrderNo,
+      poNumber,
+      poDate,
       items,
       notes,
     } = req.body;
@@ -235,8 +243,13 @@ export async function updateDeliveryChallan(req: AuthRequest, res: Response) {
         processedItems = items.map((i: any) => ({
           itemId: i.itemId,
           itemName: i.itemName || 'Item',
+          description: i.description || null,
+          hsnSac: i.hsnSac || null,
           unit: i.unit || 'Nos',
           quantity: Number(i.quantity) || 1,
+          freeQuantity: Number(i.freeQuantity) || 0,
+          serialNumber: i.serialNumber || null,
+          notes: i.notes || null,
         }));
 
         await tx.deliveryChallanItem.deleteMany({ where: { deliveryChallanId: id } });
@@ -247,13 +260,18 @@ export async function updateDeliveryChallan(req: AuthRequest, res: Response) {
         data: {
           challanNumber: finalDcNo,
           partyId: targetPartyId,
+          farmerId: farmerId !== undefined ? farmerId : existing.farmerId,
           challanDate: challanDate ? new Date(challanDate) : existing.challanDate,
           deliveryAddress: deliveryAddress || existing.deliveryAddress,
+          deliveryLocation: deliveryLocation !== undefined ? deliveryLocation : existing.deliveryLocation,
           contactNumber: contactNumber || existing.contactNumber,
           vehicleNumber: vehicleNumber !== undefined ? vehicleNumber : existing.vehicleNumber,
           transporter: transporter !== undefined ? transporter : existing.transporter,
+          transportName: transportName !== undefined ? transportName : existing.transportName,
           reason: reason || existing.reason,
           refOrderNo: refOrderNo !== undefined ? refOrderNo : existing.refOrderNo,
+          poNumber: poNumber !== undefined ? poNumber : existing.poNumber,
+          poDate: poDate ? new Date(poDate) : existing.poDate,
           affectsStock: affectsStock,
           stockDeducted: affectsStock,
           notes: notes !== undefined ? notes : existing.notes,
@@ -263,7 +281,7 @@ export async function updateDeliveryChallan(req: AuthRequest, res: Response) {
               }
             : undefined,
         },
-        include: { items: true, party: true },
+        include: { items: true, party: true, farmer: true },
       });
 
       // STEP 2: Apply NEW stock deduction if affectsStock is true
