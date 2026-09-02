@@ -86,7 +86,8 @@ model Party {
   mobile         String
   altMobile      String?
   email          String?
-  address        String?
+  address        String?  // Billing Address
+  shippingAddress String? // Shipping Address
   village        String?
   taluk          String?
   district       String?
@@ -658,7 +659,8 @@ model Farmer {
   mobile    String
   altMobile String?
   email     String?
-  address   String?
+  address   String?  // Billing Address / Primary Address
+  shippingAddress String? // Shipping Address
   village   String?
   taluk     String?
   district  String?

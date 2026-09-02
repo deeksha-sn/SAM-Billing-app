@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, UserPlus, Building, MapPin } from 'lucide-react';
+import { X, UserPlus } from 'lucide-react';
 import { apiRequest } from '../api';
 import { INDIAN_STATES, getStateNameFromCode } from '../utils/gstHelper';
 
@@ -13,12 +13,15 @@ export const QuickAddPartyModal: React.FC<QuickAddPartyModalProps> = ({ type, on
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
+  
+  // Simplified Address State
   const [address, setAddress] = useState('');
   const [shippingAddress, setShippingAddress] = useState('');
-  const [village, setVillage] = useState('');
-  const [district, setDistrict] = useState('Haveri');
+  const [sameAsBilling, setSameAsBilling] = useState(true);
+
   const [stateCode, setStateCode] = useState('29');
   const [state, setState] = useState('Karnataka');
+  const [pincode, setPincode] = useState('');
   const [gstin, setGstin] = useState('');
   const [customerType, setCustomerType] = useState('FARMER');
   const [loading, setLoading] = useState(false);
@@ -32,7 +35,6 @@ export const QuickAddPartyModal: React.FC<QuickAddPartyModalProps> = ({ type, on
   const handleGstinChange = (val: string) => {
     const uppercaseVal = val.toUpperCase().trim();
     setGstin(uppercaseVal);
-    // If user enters first 2 digits of GSTIN (e.g., 27 for MH, 29 for KA, 33 for TN), auto select state
     if (uppercaseVal.length >= 2) {
       const codeCandidate = uppercaseVal.substring(0, 2);
       const match = INDIAN_STATES.find((s) => s.code === codeCandidate);
@@ -62,12 +64,11 @@ export const QuickAddPartyModal: React.FC<QuickAddPartyModalProps> = ({ type, on
           customerType,
           mobile: mobile.trim(),
           email: email.trim() || null,
-          address: address.trim() || village.trim(),
-          shippingAddress: shippingAddress.trim() || address.trim() || village.trim(),
-          village: village.trim(),
-          district: district.trim(),
+          address: address.trim(),
+          shippingAddress: sameAsBilling ? address.trim() : shippingAddress.trim(),
           state: state.trim(),
           stateCode: stateCode.trim(),
+          pincode: pincode.trim() || null,
           gstin: gstin.trim() || null,
         }),
       });
@@ -81,7 +82,7 @@ export const QuickAddPartyModal: React.FC<QuickAddPartyModalProps> = ({ type, on
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-sans">
       <div className="bg-slate-900 border border-slate-700 text-white rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4">
         
         {/* Modal Header */}
@@ -97,7 +98,7 @@ export const QuickAddPartyModal: React.FC<QuickAddPartyModalProps> = ({ type, on
 
         {error && <div className="p-3 bg-red-900/80 border border-red-700 text-red-200 text-xs rounded-xl font-bold">{error}</div>}
 
-        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs font-sans">
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
           
           {/* Name */}
           <div>
@@ -115,7 +116,6 @@ export const QuickAddPartyModal: React.FC<QuickAddPartyModalProps> = ({ type, on
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            {/* Mobile */}
             <div>
               <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">Mobile Number *</label>
               <input
@@ -128,7 +128,6 @@ export const QuickAddPartyModal: React.FC<QuickAddPartyModalProps> = ({ type, on
               />
             </div>
 
-            {/* Category */}
             <div>
               <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">Category</label>
               <select
@@ -141,6 +140,56 @@ export const QuickAddPartyModal: React.FC<QuickAddPartyModalProps> = ({ type, on
                 <option value="DEALER">Dealer / Distributor</option>
                 <option value="BUSINESS">Business / Company</option>
               </select>
+            </div>
+          </div>
+
+          {/* SIMPLIFIED ADDRESS */}
+          <div className="space-y-2">
+            <div>
+              <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">
+                BILLING ADDRESS
+              </label>
+              <textarea
+                rows={2}
+                value={address}
+                onChange={(e) => {
+                  setAddress(e.target.value);
+                  if (sameAsBilling) setShippingAddress(e.target.value);
+                }}
+                placeholder="Full billing address (e.g. Main Road, Haveri, Karnataka - 581110)"
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider">
+                  SHIPPING ADDRESS
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold text-emerald-400">
+                  <input
+                    type="checkbox"
+                    checked={sameAsBilling}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setSameAsBilling(checked);
+                      if (checked) setShippingAddress(address);
+                    }}
+                    className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
+                  />
+                  <span>Same as Billing</span>
+                </label>
+              </div>
+              <textarea
+                rows={2}
+                value={shippingAddress}
+                disabled={sameAsBilling}
+                onChange={(e) => setShippingAddress(e.target.value)}
+                placeholder="Shipping/delivery address"
+                className={`w-full px-3 py-2 border rounded-xl text-white font-medium ${
+                  sameAsBilling ? 'bg-slate-950 border-slate-800 opacity-60' : 'bg-slate-950 border-slate-700'
+                }`}
+              />
             </div>
           </div>
 
@@ -158,7 +207,7 @@ export const QuickAddPartyModal: React.FC<QuickAddPartyModalProps> = ({ type, on
             </div>
 
             <div>
-              <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">State & State Code *</label>
+              <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">State & Code *</label>
               <select
                 value={stateCode}
                 onChange={(e) => handleStateChange(e.target.value)}
@@ -171,45 +220,6 @@ export const QuickAddPartyModal: React.FC<QuickAddPartyModalProps> = ({ type, on
                 ))}
               </select>
             </div>
-          </div>
-
-          {/* Billing Address & Village */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">Billing Address / Village</label>
-              <input
-                type="text"
-                placeholder="Village / Road / Town"
-                value={village}
-                onChange={(e) => {
-                  setVillage(e.target.value);
-                  if (!address) setAddress(e.target.value);
-                }}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">District / City</label>
-              <input
-                type="text"
-                placeholder="Haveri / Bangalore"
-                value={district}
-                onChange={(e) => setDistrict(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium"
-              />
-            </div>
-          </div>
-
-          {/* Shipping Address */}
-          <div>
-            <label className="block text-[11px] font-extrabold text-slate-300 uppercase tracking-wider mb-1">Shipping Address / Delivery Site</label>
-            <input
-              type="text"
-              placeholder="Same as Billing / Farm Site No. 2"
-              value={shippingAddress}
-              onChange={(e) => setShippingAddress(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium"
-            />
           </div>
 
           {/* Actions */}

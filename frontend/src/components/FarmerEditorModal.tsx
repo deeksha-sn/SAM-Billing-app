@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Save, UserPlus, UserCheck, MapPin, Phone, Building } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Save, UserPlus, UserCheck } from 'lucide-react';
 import { apiRequest } from '../api';
 import { INDIAN_STATES, getStateNameFromCode } from '../utils/gstHelper';
 
@@ -22,10 +22,12 @@ export const FarmerEditorModal: React.FC<FarmerEditorModalProps> = ({
   const [mobile, setMobile] = useState(farmer?.mobile || '');
   const [altMobile, setAltMobile] = useState(farmer?.altMobile || '');
   const [email, setEmail] = useState(farmer?.email || '');
+
+  // Simplified Address State
   const [address, setAddress] = useState(farmer?.address || '');
-  const [village, setVillage] = useState(farmer?.village || '');
-  const [taluk, setTaluk] = useState(farmer?.taluk || '');
-  const [district, setDistrict] = useState(farmer?.district || parentParty?.district || '');
+  const [shippingAddress, setShippingAddress] = useState(farmer?.shippingAddress || farmer?.address || '');
+  const [sameAsBilling, setSameAsBilling] = useState(!farmer?.shippingAddress || farmer?.shippingAddress === farmer?.address);
+
   const [stateCode, setStateCode] = useState(farmer?.stateCode || parentParty?.stateCode || '29');
   const [state, setState] = useState(farmer?.state || parentParty?.state || 'Karnataka');
   const [pincode, setPincode] = useState(farmer?.pincode || '');
@@ -55,10 +57,8 @@ export const FarmerEditorModal: React.FC<FarmerEditorModalProps> = ({
       mobile: mobile.trim(),
       altMobile: altMobile.trim() || null,
       email: email.trim() || null,
-      address: address.trim() || village.trim(),
-      village: village.trim(),
-      taluk: taluk.trim(),
-      district: district.trim(),
+      address: address.trim(),
+      shippingAddress: sameAsBilling ? address.trim() : shippingAddress.trim(),
       state: state.trim(),
       stateCode: stateCode.trim(),
       pincode: pincode.trim() || null,
@@ -174,55 +174,60 @@ export const FarmerEditorModal: React.FC<FarmerEditorModalProps> = ({
             </div>
           </div>
 
-          {/* Location Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
-            <div className="md:col-span-2">
-              <label className="block font-bold text-slate-300 mb-1">Farm / Installation Address *</label>
-              <input
-                type="text"
-                required
+          {/* SIMPLIFIED BILLING & SHIPPING ADDRESS SECTION */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950 p-4 rounded-2xl border border-slate-800">
+            <div>
+              <label className="block font-extrabold text-slate-300 uppercase tracking-wider text-[11px] mb-1">
+                BILLING ADDRESS
+              </label>
+              <textarea
+                rows={3}
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Door / Plot No, Main Road, Near Milk Dairy"
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium"
+                onChange={(e) => {
+                  setAddress(e.target.value);
+                  if (sameAsBilling) setShippingAddress(e.target.value);
+                }}
+                placeholder="Enter complete billing address (e.g. Main Road, Near Bus Stand, Haveri, Karnataka - 581110)"
+                className="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs font-medium text-white focus:ring-2 focus:ring-emerald-500"
               />
             </div>
 
             <div>
-              <label className="block font-bold text-slate-300 mb-1">Village / City</label>
-              <input
-                type="text"
-                value={village}
-                onChange={(e) => setVillage(e.target.value)}
-                placeholder="e.g. Haveri / Tiptur / Arasikere"
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white"
+              <div className="flex justify-between items-center mb-1">
+                <label className="block font-extrabold text-slate-300 uppercase tracking-wider text-[11px]">
+                  SHIPPING ADDRESS
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-lg border border-emerald-700">
+                  <input
+                    type="checkbox"
+                    checked={sameAsBilling}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setSameAsBilling(checked);
+                      if (checked) setShippingAddress(address);
+                    }}
+                    className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
+                  />
+                  <span>Same as Billing Address</span>
+                </label>
+              </div>
+
+              <textarea
+                rows={3}
+                value={shippingAddress}
+                disabled={sameAsBilling}
+                onChange={(e) => setShippingAddress(e.target.value)}
+                placeholder="Enter complete shipping/delivery address"
+                className={`w-full p-2.5 border rounded-xl text-xs font-medium text-white ${
+                  sameAsBilling ? 'bg-slate-950 border-slate-800 opacity-60' : 'bg-slate-900 border-slate-700 focus:ring-2 focus:ring-emerald-500'
+                }`}
               />
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block font-bold text-slate-300 mb-1">Taluk / Sub-District</label>
-              <input
-                type="text"
-                value={taluk}
-                onChange={(e) => setTaluk(e.target.value)}
-                placeholder="Taluk name"
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-300 mb-1">District</label>
-              <input
-                type="text"
-                value={district}
-                onChange={(e) => setDistrict(e.target.value)}
-                placeholder="District name"
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-300 mb-1">State & State Code</label>
+              <label className="block font-bold text-slate-300 mb-1">State</label>
               <select
                 value={stateCode}
                 onChange={(e) => handleStateChange(e.target.value)}

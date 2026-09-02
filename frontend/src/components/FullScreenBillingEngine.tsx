@@ -535,7 +535,7 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
                   setSelectedFarmer(f);
                   setSelectedFarmerId(f ? f.id : '');
                   if (f) {
-                    const fAddr = [f.name, `Phone: ${f.mobile}`, f.address || f.village, f.district, f.state].filter(Boolean).join(', ');
+                    const fAddr = f.shippingAddress || f.address || `${f.name}, Phone: ${f.mobile}`;
                     setDeliveryLocation(fAddr);
                   }
                 }}

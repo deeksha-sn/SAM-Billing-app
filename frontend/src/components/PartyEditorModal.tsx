@@ -25,10 +25,12 @@ export const PartyEditorModal: React.FC<PartyEditorModalProps> = ({
   const [mobile, setMobile] = useState(party?.mobile || '');
   const [altMobile, setAltMobile] = useState(party?.altMobile || '');
   const [email, setEmail] = useState(party?.email || '');
+
+  // Simplified Address State
   const [address, setAddress] = useState(party?.address || '');
-  const [village, setVillage] = useState(party?.village || '');
-  const [taluk, setTaluk] = useState(party?.taluk || '');
-  const [district, setDistrict] = useState(party?.district || '');
+  const [shippingAddress, setShippingAddress] = useState(party?.shippingAddress || party?.address || '');
+  const [sameAsBilling, setSameAsBilling] = useState(!party?.shippingAddress || party?.shippingAddress === party?.address);
+
   const [state, setState] = useState(party?.state || 'Karnataka');
   const [stateCode, setStateCode] = useState(party?.stateCode || '29');
   const [pincode, setPincode] = useState(party?.pincode || '');
@@ -101,9 +103,7 @@ export const PartyEditorModal: React.FC<PartyEditorModalProps> = ({
       altMobile,
       email,
       address,
-      village,
-      taluk,
-      district,
+      shippingAddress: sameAsBilling ? address : shippingAddress,
       state,
       stateCode,
       pincode,
@@ -141,8 +141,8 @@ export const PartyEditorModal: React.FC<PartyEditorModalProps> = ({
     return (
       f.name?.toLowerCase().includes(q) ||
       f.mobile?.includes(q) ||
-      f.village?.toLowerCase().includes(q) ||
-      f.district?.toLowerCase().includes(q)
+      f.address?.toLowerCase().includes(q) ||
+      f.shippingAddress?.toLowerCase().includes(q)
     );
   });
 
@@ -276,67 +276,87 @@ export const PartyEditorModal: React.FC<PartyEditorModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <label className="block font-bold text-gray-700 mb-1">Billing Address</label>
-              <input
-                type="text"
+          {/* SIMPLIFIED BILLING & SHIPPING ADDRESS SECTION */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+            <div>
+              <label className="block font-extrabold text-gray-800 uppercase tracking-wider text-[11px] mb-1">
+                BILLING ADDRESS
+              </label>
+              <textarea
+                rows={3}
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Street address, shop number, plot details"
-                className="w-full p-2.5 bg-white border border-gray-300 rounded-xl"
+                onChange={(e) => {
+                  setAddress(e.target.value);
+                  if (sameAsBilling) setShippingAddress(e.target.value);
+                }}
+                placeholder="Enter complete billing address (e.g. Main Road, Near Bus Stand, Haveri, Karnataka - 581110)"
+                className="w-full p-2.5 bg-white border border-gray-300 rounded-xl text-xs font-medium text-gray-900"
               />
             </div>
 
             <div>
-              <label className="block font-bold text-gray-700 mb-1">Village / City</label>
-              <input
-                type="text"
-                value={village}
-                onChange={(e) => setVillage(e.target.value)}
-                placeholder="Village / Town / City"
-                className="w-full p-2.5 bg-white border border-gray-300 rounded-xl"
+              <div className="flex justify-between items-center mb-1">
+                <label className="block font-extrabold text-gray-800 uppercase tracking-wider text-[11px]">
+                  SHIPPING ADDRESS
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                  <input
+                    type="checkbox"
+                    checked={sameAsBilling}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setSameAsBilling(checked);
+                      if (checked) setShippingAddress(address);
+                    }}
+                    className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
+                  />
+                  <span>Same as Billing Address</span>
+                </label>
+              </div>
+
+              <textarea
+                rows={3}
+                value={shippingAddress}
+                disabled={sameAsBilling}
+                onChange={(e) => setShippingAddress(e.target.value)}
+                placeholder="Enter complete shipping/delivery address"
+                className={`w-full p-2.5 border rounded-xl text-xs font-medium text-gray-900 ${
+                  sameAsBilling ? 'bg-gray-100 border-gray-200 opacity-80' : 'bg-white border-gray-300'
+                }`}
               />
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block font-bold text-gray-700 mb-1">Taluk / Sub-District</label>
-              <input
-                type="text"
-                value={taluk}
-                onChange={(e) => setTaluk(e.target.value)}
-                placeholder="Taluk name"
-                className="w-full p-2.5 bg-white border border-gray-300 rounded-xl"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-gray-700 mb-1">District</label>
-              <input
-                type="text"
-                value={district}
-                onChange={(e) => setDistrict(e.target.value)}
-                placeholder="District name"
-                className="w-full p-2.5 bg-white border border-gray-300 rounded-xl"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-gray-700 mb-1">State & Code</label>
+              <label className="block font-bold text-gray-700 mb-1">State & State Code</label>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={state}
                   onChange={(e) => setState(e.target.value)}
-                  className="w-full p-2.5 bg-white border border-gray-300 rounded-xl"
+                  placeholder="State Name"
+                  className="w-full p-2.5 bg-white border border-gray-300 rounded-xl font-bold"
                 />
                 <input
                   type="text"
                   value={stateCode}
                   onChange={(e) => setStateCode(e.target.value)}
+                  placeholder="Code"
                   className="w-16 p-2.5 bg-white border border-gray-300 rounded-xl text-center font-mono font-bold"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block font-bold text-gray-700 mb-1">PIN Code</label>
+              <input
+                type="text"
+                value={pincode}
+                onChange={(e) => setPincode(e.target.value)}
+                placeholder="6-digit PIN code"
+                className="w-full p-2.5 bg-white border border-gray-300 rounded-xl font-mono"
+              />
             </div>
           </div>
 
@@ -417,7 +437,7 @@ export const PartyEditorModal: React.FC<PartyEditorModalProps> = ({
                     <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="text"
-                      placeholder="Search Farmers by name, phone, village..."
+                      placeholder="Search Farmers by name, phone, address..."
                       value={farmerSearch}
                       onChange={(e) => setFarmerSearch(e.target.value)}
                       className="w-full pl-8 pr-3 py-2 bg-gray-100 border border-gray-300 rounded-xl text-xs font-medium text-gray-900"
@@ -437,7 +457,7 @@ export const PartyEditorModal: React.FC<PartyEditorModalProps> = ({
                         <tr>
                           <th className="p-3">Farmer Name</th>
                           <th className="p-3">Phone</th>
-                          <th className="p-3">Location</th>
+                          <th className="p-3">Shipping Address</th>
                           <th className="p-3 text-right">Actions</th>
                         </tr>
                       </thead>
@@ -453,8 +473,8 @@ export const PartyEditorModal: React.FC<PartyEditorModalProps> = ({
                               )}
                             </td>
                             <td className="p-3 font-mono font-semibold">{f.mobile}</td>
-                            <td className="p-3">
-                              {[f.village, f.district, f.state].filter(Boolean).join(', ') || 'No village specified'}
+                            <td className="p-3 max-w-xs truncate">
+                              {f.shippingAddress || f.address || 'No address specified'}
                             </td>
                             <td className="p-3 text-right space-x-1.5">
                               <button
