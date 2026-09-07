@@ -399,19 +399,23 @@ export async function seedDatabase() {
 
       // Explicit Payment records for paid/partial invoices (10 Payments)
       if (invDef.paid > 0) {
-        await prisma.payment.create({
-          data: {
-            receiptNo: `PAY-INV-${invDef.no.substring(10)}`,
-            financialYear: '2026-2027',
-            paymentType: 'CUSTOMER_PAYMENT',
-            partyId: party.id,
-            amount: invDef.paid,
-            paymentMode: invDef.mode,
-            date: existingInv.invoiceDate,
-            referenceNo: `REF-${invDef.no}`,
-            notes: `Payment received for invoice ${invDef.no}`,
-          },
-        });
+        const payReceiptNo = `PAY-INV-${invDef.no.substring(10)}`;
+        const existingPay = await prisma.payment.findUnique({ where: { receiptNo: payReceiptNo } });
+        if (!existingPay) {
+          await prisma.payment.create({
+            data: {
+              receiptNo: payReceiptNo,
+              financialYear: '2026-2027',
+              paymentType: 'CUSTOMER_PAYMENT',
+              partyId: party.id,
+              amount: invDef.paid,
+              paymentMode: invDef.mode,
+              date: existingInv.invoiceDate,
+              referenceNo: `REF-${invDef.no}`,
+              notes: `Payment received for invoice ${invDef.no}`,
+            },
+          });
+        }
       }
     }
     dbInvoices.push(existingInv);

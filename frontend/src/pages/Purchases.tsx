@@ -44,7 +44,8 @@ export const Purchases: React.FC = () => {
     setErrorMsg(null);
     try {
       const res = await apiRequest('/purchases');
-      setPurchases(res.purchases || []);
+      const list = Array.isArray(res) ? res : res.purchases || [];
+      setPurchases(list);
     } catch (err: any) {
       console.error('Failed to load purchases:', err);
       setErrorMsg(err.message || 'Failed to load purchases from server');

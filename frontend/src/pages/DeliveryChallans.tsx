@@ -43,7 +43,8 @@ export const DeliveryChallans: React.FC = () => {
     setErrorMsg(null);
     try {
       const res = await apiRequest('/delivery-challans');
-      setChallans(res.challans || []);
+      const list = Array.isArray(res) ? res : res.challans || [];
+      setChallans(list);
       const sRes = await apiRequest('/settings/system');
       setStockSetting(sRes.settings?.delivery_challan_affects_stock || 'YES');
     } catch (err: any) {

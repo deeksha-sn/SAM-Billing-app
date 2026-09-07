@@ -54,7 +54,8 @@ export const SalesInvoices: React.FC = () => {
     setErrorMsg(null);
     try {
       const res = await apiRequest('/sales/invoices');
-      setInvoices(res.invoices || []);
+      const list = Array.isArray(res) ? res : res.invoices || [];
+      setInvoices(list);
     } catch (err: any) {
       console.error('Error loading invoices:', err);
       setErrorMsg(err.message || 'Failed to load sales invoices from server');

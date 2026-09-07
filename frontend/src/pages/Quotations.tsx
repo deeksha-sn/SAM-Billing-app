@@ -59,7 +59,8 @@ export const Quotations: React.FC = () => {
     setErrorMsg(null);
     try {
       const res = await apiRequest('/quotations');
-      setQuotations(res.quotations || []);
+      const list = Array.isArray(res) ? res : res.quotations || [];
+      setQuotations(list);
     } catch (err: any) {
       console.error('Error loading quotations:', err);
       setErrorMsg(err.message || 'Failed to load quotations from server');

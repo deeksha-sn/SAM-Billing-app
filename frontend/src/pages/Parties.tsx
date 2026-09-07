@@ -30,7 +30,8 @@ export const Parties: React.FC = () => {
     try {
       const typeQuery = activeTab !== 'ALL' ? `?type=${activeTab}` : '';
       const res = await apiRequest(`/parties${typeQuery}`);
-      setParties(res.parties || []);
+      const list = Array.isArray(res) ? res : res.parties || [];
+      setParties(list);
     } catch (err) {
       console.error('Failed to load parties:', err);
     } finally {

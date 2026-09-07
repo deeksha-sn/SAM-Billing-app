@@ -32,7 +32,8 @@ export const Inventory: React.FC = () => {
   const loadItems = async () => {
     try {
       const res = await apiRequest('/items');
-      setItems(res.items);
+      const list = Array.isArray(res) ? res : res.items || [];
+      setItems(list);
     } catch (err) {
       console.error(err);
     }
