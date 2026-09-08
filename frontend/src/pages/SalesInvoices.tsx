@@ -42,6 +42,7 @@ export const SalesInvoices: React.FC = () => {
         onSaved={(saved) => {
           setShowEditorModal(false);
           setEditingInvoice(null);
+          setViewingInvoice(saved);
           setSearchParams({});
           loadInvoices();
         }}

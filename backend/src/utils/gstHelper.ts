@@ -81,53 +81,75 @@ export interface CalculateItemGstParams {
   discountAmount?: number;
   gstRate: number;
   isExempt?: boolean;
+  isInclusive?: boolean;
   isInterState: boolean;
 }
 
 export function calculateItemGst(params: CalculateItemGstParams) {
-  const qty = Math.max(0, Number(params.quantity) || 0);
+  const qty = Math.max(1, Number(params.quantity) || 1);
   const rate = Math.max(0, Number(params.rate) || 0);
   const discPct = Math.max(0, Number(params.discountPercent) || 0);
   const discAmtInput = Math.max(0, Number(params.discountAmount) || 0);
+  const isInclusive = Boolean(params.isInclusive);
+  const isExempt = Boolean(params.isExempt) || Number(params.gstRate) === 0;
+  const gstPct = isExempt ? 0 : Number(params.gstRate) || 0;
 
-  const grossValue = qty * rate;
+  let taxableValue = 0;
+  let totalTaxAmount = 0;
+  let totalAmount = 0;
 
-  let discountAmount = 0;
-  if (discAmtInput > 0) {
-    discountAmount = discAmtInput;
-  } else if (discPct > 0) {
-    discountAmount = (grossValue * discPct) / 100;
+  if (isInclusive) {
+    // Rate is GST-Inclusive
+    const grossInclusive = qty * rate;
+    let discountAmount = 0;
+    if (discAmtInput > 0) {
+      discountAmount = discAmtInput;
+    } else if (discPct > 0) {
+      discountAmount = (grossInclusive * discPct) / 100;
+    }
+
+    totalAmount = Math.max(0, grossInclusive - discountAmount);
+
+    if (isExempt || gstPct === 0) {
+      taxableValue = totalAmount;
+      totalTaxAmount = 0;
+    } else {
+      taxableValue = totalAmount / (1 + gstPct / 100);
+      totalTaxAmount = totalAmount - taxableValue;
+    }
+  } else {
+    // Rate is GST-Exclusive (Base Taxable)
+    const grossTaxable = qty * rate;
+    let discountAmount = 0;
+    if (discAmtInput > 0) {
+      discountAmount = discAmtInput;
+    } else if (discPct > 0) {
+      discountAmount = (grossTaxable * discPct) / 100;
+    }
+
+    taxableValue = Math.max(0, grossTaxable - discountAmount);
+
+    if (isExempt || gstPct === 0) {
+      totalTaxAmount = 0;
+      totalAmount = taxableValue;
+    } else {
+      totalTaxAmount = (taxableValue * gstPct) / 100;
+      totalAmount = taxableValue + totalTaxAmount;
+    }
   }
-
-  const taxableValue = Math.max(0, grossValue - discountAmount);
-
-  if (params.isExempt || Number(params.gstRate) === 0) {
-    return {
-      taxableValue: Math.round(taxableValue * 100) / 100,
-      gstRate: 0,
-      cgstAmount: 0,
-      sgstAmount: 0,
-      igstAmount: 0,
-      totalAmount: Math.round(taxableValue * 100) / 100,
-      isExempt: Boolean(params.isExempt),
-    };
-  }
-
-  const gstPct = Number(params.gstRate) || 0;
-  const totalTaxAmount = (taxableValue * gstPct) / 100;
 
   let cgstAmount = 0;
   let sgstAmount = 0;
   let igstAmount = 0;
 
-  if (params.isInterState) {
-    igstAmount = totalTaxAmount;
-  } else {
-    cgstAmount = totalTaxAmount / 2;
-    sgstAmount = totalTaxAmount / 2;
+  if (!isExempt && gstPct > 0) {
+    if (params.isInterState) {
+      igstAmount = totalTaxAmount;
+    } else {
+      cgstAmount = totalTaxAmount / 2;
+      sgstAmount = totalTaxAmount / 2;
+    }
   }
-
-  const totalAmount = taxableValue + totalTaxAmount;
 
   return {
     taxableValue: Math.round(taxableValue * 100) / 100,
@@ -136,6 +158,7 @@ export function calculateItemGst(params: CalculateItemGstParams) {
     sgstAmount: Math.round(sgstAmount * 100) / 100,
     igstAmount: Math.round(igstAmount * 100) / 100,
     totalAmount: Math.round(totalAmount * 100) / 100,
-    isExempt: false,
+    isExempt,
+    isInclusive,
   };
 }

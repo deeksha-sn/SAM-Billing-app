@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Edit, Printer, Share2, Download, FileText, Trash2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Edit, Printer, Share2, Download, FileText, Trash2, CheckCircle2, AlertCircle, MessageSquare } from 'lucide-react';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
@@ -48,6 +48,11 @@ export const ViewInvoiceModal: React.FC<ViewInvoiceModalProps> = ({
   const party = invoice.party || {};
   const isDraft = invoice.status === 'DRAFT';
   const isCancelled = invoice.status === 'CANCELLED';
+
+  const whatsappPhone = party.mobile ? String(party.mobile).replace(/\D/g, '') : '';
+  const formattedPhone = whatsappPhone.length === 10 ? `91${whatsappPhone}` : whatsappPhone;
+  const whatsappMsg = `Smart Agro Machinerys\n\nInvoice No: ${invoice.invoiceNumber}\nCustomer: ${party.name || 'Customer'}\nInvoice Amount: ₹${(invoice.grandTotal || 0).toLocaleString('en-IN')}\nDue Amount: ₹${(invoice.balanceDue || 0).toLocaleString('en-IN')}\nDue Date: ${invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('en-IN') : 'Immediate'}\n\nThank you for your business!`;
+  const whatsappUrl = formattedPhone ? `https://wa.me/${formattedPhone}?text=${encodeURIComponent(whatsappMsg)}` : `https://wa.me/?text=${encodeURIComponent(whatsappMsg)}`;
 
   const handleDownloadPdf = () => {
     const element = document.getElementById('view-invoice-document');
@@ -103,6 +108,15 @@ export const ViewInvoiceModal: React.FC<ViewInvoiceModalProps> = ({
               <Printer className="w-3.5 h-3.5" />
               <span>Print A4</span>
             </button>
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition shadow"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>WhatsApp</span>
+            </a>
             <button
               onClick={onShare}
               className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition shadow"

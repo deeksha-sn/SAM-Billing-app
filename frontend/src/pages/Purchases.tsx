@@ -33,6 +33,7 @@ export const Purchases: React.FC = () => {
         onBack={() => setEditorModalPurchase(null)}
         onSaved={(saved) => {
           setEditorModalPurchase(null);
+          setViewingPurchase(saved);
           loadPurchases();
         }}
       />

@@ -274,6 +274,7 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
         discountAmount: 0,
         gstRate: 18,
         isExempt: false,
+        isInclusive: false,
       },
     ]);
   };
@@ -308,6 +309,25 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
     setLineItems(updated);
   };
 
+  const handleTotalChange = (index: number, newTotalVal: any) => {
+    const updated = [...lineItems];
+    const item = { ...updated[index] };
+    const targetTotal = Math.max(0, Number(newTotalVal) || 0);
+    const qty = Math.max(1, Number(item.quantity) || 1);
+    const isExempt = item.gstRate === 'EXEMPT' || item.isExempt;
+    const gstPct = isExempt ? 0 : Number(item.gstRate) || 0;
+    const isInclusive = Boolean(item.isInclusive);
+
+    if (isInclusive) {
+      item.rate = Number((targetTotal / qty).toFixed(4));
+    } else {
+      const taxable = gstPct > 0 ? targetTotal / (1 + gstPct / 100) : targetTotal;
+      item.rate = Number((taxable / qty).toFixed(4));
+    }
+    updated[index] = item;
+    setLineItems(updated);
+  };
+
   // Real-Time Total Calculations
   let subtotalTaxable = 0;
   let totalCgst = 0;
@@ -331,6 +351,7 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
       discountAmount: discAmt,
       gstRate: gstRateVal,
       isExempt: isExempt,
+      isInclusive: Boolean(line.isInclusive),
       isInterState: isInterState,
     });
 
@@ -401,6 +422,7 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
         discountAmount: Number(line.discountAmount) || 0,
         gstRate: line.gstRate === 'EXEMPT' ? 'EXEMPT' : Number(line.gstRate) || 0,
         isExempt: line.gstRate === 'EXEMPT' || Boolean(line.isExempt),
+        isInclusive: Boolean(line.isInclusive),
       })),
     };
 
@@ -696,21 +718,22 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
           </div>
 
           <div className="overflow-x-auto border border-slate-700 rounded-2xl">
-            <table className="w-full text-left border-collapse min-w-[1100px]">
+            <table className="w-full text-left border-collapse min-w-[1250px]">
               <thead className="bg-slate-950 text-slate-400 text-[10px] font-black uppercase tracking-wider border-b border-slate-700">
                 <tr>
                   <th className="p-3 w-10 text-center">#</th>
                   <th className="p-3 min-w-[200px]">Item / Equipment</th>
-                  <th className="p-3 min-w-[180px]">Description</th>
+                  <th className="p-3 min-w-[150px]">Description</th>
                   <th className="p-3 w-24">HSN/SAC</th>
                   <th className="p-3 w-20 text-center">Qty</th>
                   <th className="p-3 w-20 text-center">Free</th>
-                  {isChallan && <th className="p-3 w-32 text-center text-amber-400">Serial Number</th>}
+                  <th className="p-3 w-28 text-center text-amber-400">Serial Number</th>
                   <th className="p-3 w-28 text-right">Price (₹)</th>
+                  <th className="p-3 w-24 text-center">GST Incl.</th>
                   <th className="p-3 w-24 text-right">Disc %</th>
                   <th className="p-3 w-28 text-center">GST %</th>
                   <th className="p-3 w-28 text-right">Tax (₹)</th>
-                  <th className="p-3 w-32 text-right">Total (₹)</th>
+                  <th className="p-3 w-36 text-right">Total (₹) [Editable]</th>
                   <th className="p-3 w-10 text-center"></th>
                 </tr>
               </thead>
@@ -778,28 +801,42 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
                       />
                     </td>
 
-                    {/* Serial Number (DC Mode) */}
-                    {isChallan && (
-                      <td className="p-2">
-                        <input
-                          type="text"
-                          value={row.serialNumber || ''}
-                          onChange={(e) => handleFieldChange(idx, 'serialNumber', e.target.value)}
-                          placeholder="e.g. MM-001"
-                          className="w-full p-2 bg-slate-900 border border-slate-600 rounded-xl font-mono font-extrabold text-amber-300 text-xs"
-                        />
-                      </td>
-                    )}
+                    {/* Serial Number */}
+                    <td className="p-2">
+                      <input
+                        type="text"
+                        value={row.serialNumber || ''}
+                        onChange={(e) => handleFieldChange(idx, 'serialNumber', e.target.value)}
+                        placeholder="e.g. MM-001"
+                        className="w-full p-2 bg-slate-900 border border-slate-600 rounded-xl font-mono font-extrabold text-amber-300 text-xs"
+                      />
+                    </td>
 
                     {/* Price / Unit */}
                     <td className="p-2">
                       <input
                         type="number"
+                        step="any"
                         min="0"
                         value={row.rate}
                         onChange={(e) => handleFieldChange(idx, 'rate', e.target.value)}
                         className="w-full p-2 bg-slate-900 border border-slate-600 rounded-xl font-mono font-bold text-right text-emerald-400"
                       />
+                    </td>
+
+                    {/* GST Inclusive Toggle */}
+                    <td className="p-2 text-center">
+                      <label className="inline-flex items-center gap-1 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(row.isInclusive)}
+                          onChange={(e) => handleFieldChange(idx, 'isInclusive', e.target.checked)}
+                          className="w-3.5 h-3.5 accent-emerald-500 rounded cursor-pointer"
+                        />
+                        <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${row.isInclusive ? 'bg-emerald-900 text-emerald-300 border border-emerald-700' : 'bg-slate-800 text-slate-400'}`}>
+                          {row.isInclusive ? 'INCL' : 'EXCL'}
+                        </span>
+                      </label>
                     </td>
 
                     {/* Discount % */}
@@ -834,9 +871,16 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
                       ₹{((isInterState ? row.igstAmount : row.cgstAmount + row.sgstAmount) || 0).toLocaleString('en-IN')}
                     </td>
 
-                    {/* Total Amount */}
-                    <td className="p-3 text-right font-mono font-extrabold text-white text-sm">
-                      ₹{(row.totalAmount || 0).toLocaleString('en-IN')}
+                    {/* Total Amount (EDITABLE!) */}
+                    <td className="p-2">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={row.totalAmount}
+                        onChange={(e) => handleTotalChange(idx, e.target.value)}
+                        className="w-full p-2 bg-slate-900 border border-emerald-500/80 rounded-xl font-mono font-black text-right text-white text-xs shadow-inner"
+                      />
                     </td>
 
                     {/* Delete Row */}
@@ -973,6 +1017,37 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
             )}
           </div>
 
+        </div>
+
+        {/* 5. BOTTOM PRIMARY ACTION BUTTONS (Requirement #8) */}
+        <div className="bg-slate-800/90 rounded-3xl border border-slate-700 p-6 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+          <button
+            type="button"
+            onClick={onBack}
+            className="px-6 py-3 bg-slate-900 hover:bg-slate-700 text-slate-300 hover:text-white font-bold rounded-2xl text-xs transition"
+          >
+            Cancel
+          </button>
+          
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => handleSave('DRAFT')}
+              disabled={saving}
+              className="px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-2xl text-xs shadow-md transition"
+            >
+              Save Draft
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSave('CONFIRMED')}
+              disabled={saving}
+              className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl text-xs shadow-xl shadow-emerald-600/30 flex items-center gap-2 transition"
+            >
+              <Save className="w-4 h-4" />
+              <span>{saving ? 'Saving...' : 'Save & Confirm'}</span>
+            </button>
+          </div>
         </div>
 
       </div>

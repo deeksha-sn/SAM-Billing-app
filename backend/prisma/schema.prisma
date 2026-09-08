@@ -277,10 +277,12 @@ model InvoiceItem {
   taxableValue    Float
   gstRate         Float
   isExempt        Boolean @default(false)
+  isInclusive     Boolean @default(false)
   cgstAmount      Float   @default(0)
   sgstAmount      Float   @default(0)
   igstAmount      Float   @default(0)
   totalAmount     Float
+  serialNumber    String?
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   item    Item    @relation(fields: [itemId], references: [id])
@@ -333,10 +335,12 @@ model QuotationItem {
   taxableValue    Float
   gstRate         Float
   isExempt        Boolean @default(false)
+  isInclusive     Boolean @default(false)
   cgstAmount      Float   @default(0)
   sgstAmount      Float   @default(0)
   igstAmount      Float   @default(0)
   totalAmount     Float
+  serialNumber    String?
 
   quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   item      Item      @relation(fields: [itemId], references: [id])
@@ -484,10 +488,12 @@ model PurchaseItem {
   taxableValue      Float
   gstRate           Float
   isExempt          Boolean @default(false)
+  isInclusive       Boolean @default(false)
   cgstAmount        Float   @default(0)
   sgstAmount        Float   @default(0)
   igstAmount        Float   @default(0)
   totalAmount       Float
+  serialNumber      String?
 
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
   item            Item            @relation(fields: [itemId], references: [id])

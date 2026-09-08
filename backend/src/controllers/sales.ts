@@ -273,6 +273,7 @@ export async function createInvoice(req: AuthRequest, res: Response) {
         discountAmount: discountAmount,
         gstRate: gstRateVal,
         isExempt: isExempt,
+        isInclusive: Boolean(line.isInclusive),
         isInterState: isInterState,
       });
 
@@ -296,6 +297,7 @@ export async function createInvoice(req: AuthRequest, res: Response) {
         taxableValue: calc.taxableValue,
         gstRate: gstRateVal,
         isExempt: calc.isExempt,
+        isInclusive: calc.isInclusive,
         cgstAmount: calc.cgstAmount,
         sgstAmount: calc.sgstAmount,
         igstAmount: calc.igstAmount,

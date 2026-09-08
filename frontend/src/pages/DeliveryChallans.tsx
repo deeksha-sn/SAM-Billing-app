@@ -32,6 +32,7 @@ export const DeliveryChallans: React.FC = () => {
         onBack={() => setEditorModalChallan(null)}
         onSaved={(saved) => {
           setEditorModalChallan(null);
+          setViewingChallan(saved);
           loadChallans();
         }}
       />

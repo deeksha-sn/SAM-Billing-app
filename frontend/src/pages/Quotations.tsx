@@ -47,6 +47,7 @@ export const Quotations: React.FC = () => {
         onSaved={(saved) => {
           setShowEditorModal(false);
           setEditingQuotation(null);
+          setViewingQuotation(saved);
           setSearchParams({});
           loadQuotations();
         }}
