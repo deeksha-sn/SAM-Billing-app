@@ -2,34 +2,86 @@ import { Response } from 'express';
 import { prisma } from '../db';
 import { AuthRequest } from '../middleware/auth';
 
+function getIndianFinancialYearRange(refDate: Date = new Date()) {
+  const year = refDate.getFullYear();
+  const month = refDate.getMonth(); // 0-indexed: 0=Jan, 3=Apr, 11=Dec
+  let startYear: number;
+  let endYear: number;
+
+  if (month >= 3) {
+    // April to December -> FY is startYear to startYear + 1
+    startYear = year;
+    endYear = year + 1;
+  } else {
+    // January to March -> FY is startYear - 1 to startYear
+    startYear = year - 1;
+    endYear = year;
+  }
+
+  const startDate = new Date(startYear, 3, 1, 0, 0, 0, 0); // April 1 00:00:00
+  const endDate = new Date(endYear, 2, 31, 23, 59, 59, 999); // March 31 23:59:59.999
+  const fyLabel = `FY ${startYear}-${(endYear % 100).toString().padStart(2, '0')}`;
+
+  return { startDate, endDate, fyLabel, startYear, endYear };
+}
+
 export async function getDashboardStats(req: AuthRequest, res: Response) {
   try {
+    const { period = 'THIS_YEAR', startDate: reqStart, endDate: reqEnd } = req.query;
+
     const today = new Date();
-    const startOfToday = new Date(today.setHours(0, 0, 0, 0));
-    const endOfToday = new Date(today.setHours(23, 59, 59, 999));
+    let startDate: Date;
+    let endDate: Date;
+    let periodKey = (period as string).toUpperCase();
+    const fyInfo = getIndianFinancialYearRange(today);
 
-    // Today's totals
-    const todaySales = await prisma.invoice.aggregate({
-      where: { invoiceDate: { gte: startOfToday, lte: endOfToday }, status: { not: 'CANCELLED' } },
-      _sum: { grandTotal: true },
+    if (periodKey === 'TODAY') {
+      startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+      endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    } else if (periodKey === 'THIS_WEEK') {
+      const dayOfWeek = today.getDay(); // 0 is Sun, 1 is Mon
+      const distanceToMon = (dayOfWeek + 6) % 7;
+      startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - distanceToMon, 0, 0, 0, 0);
+      endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    } else if (periodKey === 'THIS_MONTH') {
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0);
+      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (periodKey === 'CUSTOM' && reqStart && reqEnd) {
+      startDate = new Date(reqStart as string);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(reqEnd as string);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      // Default THIS_YEAR (Indian Financial Year: April 1 to March 31)
+      periodKey = 'THIS_YEAR';
+      startDate = fyInfo.startDate;
+      endDate = fyInfo.endDate;
+    }
+
+    // Aggregations for the selected period
+    const salesAgg = await prisma.invoice.aggregate({
+      where: { invoiceDate: { gte: startDate, lte: endDate }, status: { not: 'CANCELLED' } },
+      _sum: { grandTotal: true, balanceDue: true },
+      _count: { id: true },
     });
 
-    const todayPurchases = await prisma.purchaseInvoice.aggregate({
-      where: { purchaseDate: { gte: startOfToday, lte: endOfToday }, status: { not: 'CANCELLED' } },
-      _sum: { grandTotal: true },
+    const purchasesAgg = await prisma.purchaseInvoice.aggregate({
+      where: { purchaseDate: { gte: startDate, lte: endDate }, status: { not: 'CANCELLED' } },
+      _sum: { grandTotal: true, balanceDue: true },
+      _count: { id: true },
     });
 
-    const todayCollections = await prisma.payment.aggregate({
-      where: { date: { gte: startOfToday, lte: endOfToday }, paymentType: 'CUSTOMER_PAYMENT' },
+    const collectionsAgg = await prisma.payment.aggregate({
+      where: { date: { gte: startDate, lte: endDate }, paymentType: 'CUSTOMER_PAYMENT' },
       _sum: { amount: true },
     });
 
-    const todayExpenses = await prisma.expense.aggregate({
-      where: { date: { gte: startOfToday, lte: endOfToday } },
+    const expensesAgg = await prisma.expense.aggregate({
+      where: { date: { gte: startDate, lte: endDate } },
       _sum: { amount: true },
     });
 
-    // Receivables & Payables
+    // Total active receivables and payables across all time
     const totalReceivables = await prisma.invoice.aggregate({
       where: { status: { in: ['UNPAID', 'PARTIALLY_PAID', 'CONFIRMED'] } },
       _sum: { balanceDue: true },
@@ -41,58 +93,125 @@ export async function getDashboardStats(req: AuthRequest, res: Response) {
     });
 
     // Services
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+
     const servicesDueToday = await prisma.serviceTask.count({
       where: { serviceDueDate: { gte: startOfToday, lte: endOfToday }, status: { not: 'COMPLETED' } },
     });
 
-    const servicesOverdue = await prisma.serviceTask.count({
+    const overdueServicesCount = await prisma.serviceTask.count({
       where: { serviceDueDate: { lt: startOfToday }, status: { not: 'COMPLETED' } },
+    });
+
+    const upcomingServicesCount = await prisma.serviceTask.count({
+      where: { serviceDueDate: { gt: endOfToday }, status: { not: 'COMPLETED' } },
     });
 
     // Low stock items count
     const items = await prisma.item.findMany({ select: { currentStock: true, minStock: true } });
     const lowStockCount = items.filter((i) => i.currentStock <= i.minStock).length;
 
-    // Monthly chart data (last 6 months)
-    const monthlyData = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date();
-      d.setMonth(d.getMonth() - i);
-      const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
-      const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
-      const monthLabel = d.toLocaleString('default', { month: 'short' });
+    // Build Dynamic Chart Data based on periodKey
+    const chartData = [];
 
-      const mSales = await prisma.invoice.aggregate({
-        where: { invoiceDate: { gte: mStart, lte: mEnd }, status: { not: 'CANCELLED' } },
-        _sum: { grandTotal: true },
-      });
+    if (periodKey === 'THIS_YEAR') {
+      // 12 months of the Indian FY: Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec, Jan, Feb, Mar
+      const fyMonths = [
+        { monthIndex: 3, year: fyInfo.startYear, label: 'Apr' },
+        { monthIndex: 4, year: fyInfo.startYear, label: 'May' },
+        { monthIndex: 5, year: fyInfo.startYear, label: 'Jun' },
+        { monthIndex: 6, year: fyInfo.startYear, label: 'Jul' },
+        { monthIndex: 7, year: fyInfo.startYear, label: 'Aug' },
+        { monthIndex: 8, year: fyInfo.startYear, label: 'Sep' },
+        { monthIndex: 9, year: fyInfo.startYear, label: 'Oct' },
+        { monthIndex: 10, year: fyInfo.startYear, label: 'Nov' },
+        { monthIndex: 11, year: fyInfo.startYear, label: 'Dec' },
+        { monthIndex: 0, year: fyInfo.endYear, label: 'Jan' },
+        { monthIndex: 1, year: fyInfo.endYear, label: 'Feb' },
+        { monthIndex: 2, year: fyInfo.endYear, label: 'Mar' },
+      ];
 
-      const mPurchases = await prisma.purchaseInvoice.aggregate({
-        where: { purchaseDate: { gte: mStart, lte: mEnd }, status: { not: 'CANCELLED' } },
-        _sum: { grandTotal: true },
-      });
+      for (const mObj of fyMonths) {
+        const mStart = new Date(mObj.year, mObj.monthIndex, 1, 0, 0, 0, 0);
+        const mEnd = new Date(mObj.year, mObj.monthIndex + 1, 0, 23, 59, 59, 999);
 
-      const mExp = await prisma.expense.aggregate({
-        where: { date: { gte: mStart, lte: mEnd } },
-        _sum: { amount: true },
-      });
+        const mSales = await prisma.invoice.aggregate({
+          where: { invoiceDate: { gte: mStart, lte: mEnd }, status: { not: 'CANCELLED' } },
+          _sum: { grandTotal: true },
+        });
+        const mPurchases = await prisma.purchaseInvoice.aggregate({
+          where: { purchaseDate: { gte: mStart, lte: mEnd }, status: { not: 'CANCELLED' } },
+          _sum: { grandTotal: true },
+        });
+        const mExp = await prisma.expense.aggregate({
+          where: { date: { gte: mStart, lte: mEnd } },
+          _sum: { amount: true },
+        });
 
-      const salesVal = mSales._sum.grandTotal || 0;
-      const purVal = mPurchases._sum.grandTotal || 0;
-      const expVal = mExp._sum.amount || 0;
+        const salesVal = mSales._sum.grandTotal || 0;
+        const purVal = mPurchases._sum.grandTotal || 0;
+        const expVal = mExp._sum.amount || 0;
 
-      monthlyData.push({
-        month: monthLabel,
-        sales: salesVal,
-        purchases: purVal,
-        expenses: expVal,
-        profit: salesVal - purVal - expVal,
-      });
+        chartData.push({
+          month: mObj.label,
+          sales: salesVal,
+          purchases: purVal,
+          expenses: expVal,
+          profit: salesVal - purVal - expVal,
+        });
+      }
+    } else {
+      // Daily breakdown for TODAY, THIS_WEEK, THIS_MONTH, or CUSTOM <= 31 days
+      let iterStart = new Date(startDate);
+      let iterEnd = new Date(endDate);
+
+      if (periodKey === 'TODAY') {
+        iterStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6, 0, 0, 0, 0);
+      }
+
+      const curr = new Date(iterStart);
+      while (curr <= iterEnd) {
+        const dStart = new Date(curr.getFullYear(), curr.getMonth(), curr.getDate(), 0, 0, 0, 0);
+        const dEnd = new Date(curr.getFullYear(), curr.getMonth(), curr.getDate(), 23, 59, 59, 999);
+
+        const dayLabel = curr.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+
+        const dSales = await prisma.invoice.aggregate({
+          where: { invoiceDate: { gte: dStart, lte: dEnd }, status: { not: 'CANCELLED' } },
+          _sum: { grandTotal: true },
+        });
+        const dPurchases = await prisma.purchaseInvoice.aggregate({
+          where: { purchaseDate: { gte: dStart, lte: dEnd }, status: { not: 'CANCELLED' } },
+          _sum: { grandTotal: true },
+        });
+        const dExp = await prisma.expense.aggregate({
+          where: { date: { gte: dStart, lte: dEnd } },
+          _sum: { amount: true },
+        });
+
+        const salesVal = dSales._sum.grandTotal || 0;
+        const purVal = dPurchases._sum.grandTotal || 0;
+        const expVal = dExp._sum.amount || 0;
+
+        chartData.push({
+          month: dayLabel,
+          sales: salesVal,
+          purchases: purVal,
+          expenses: expVal,
+          profit: salesVal - purVal - expVal,
+        });
+
+        curr.setDate(curr.getDate() + 1);
+      }
     }
 
-    // Top selling items
+    // Top selling items in selected date range
     const topItems = await prisma.invoiceItem.groupBy({
       by: ['itemId', 'itemName'],
+      where: {
+        invoice: { invoiceDate: { gte: startDate, lte: endDate }, status: { not: 'CANCELLED' } },
+      },
       _sum: { quantity: true, totalAmount: true },
       orderBy: { _sum: { quantity: 'desc' } },
       take: 5,
@@ -107,18 +226,38 @@ export async function getDashboardStats(req: AuthRequest, res: Response) {
     const filteredLowStock = lowStockItems.filter((i) => i.currentStock <= i.minStock);
 
     return res.json({
+      period: periodKey,
+      fyLabel: fyInfo.fyLabel,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
       summary: {
-        todaySales: todaySales._sum.grandTotal || 0,
-        todayPurchases: todayPurchases._sum.grandTotal || 0,
-        todayCollections: todayCollections._sum.amount || 0,
-        todayExpenses: todayExpenses._sum.amount || 0,
+        // Backwards compatibility field aliases
+        todaySales: salesAgg._sum.grandTotal || 0,
+        todayPurchases: purchasesAgg._sum.grandTotal || 0,
+        todayCollections: collectionsAgg._sum.amount || 0,
+        todayExpenses: expensesAgg._sum.amount || 0,
+
+        // Period specific metrics
+        periodSales: salesAgg._sum.grandTotal || 0,
+        periodPurchases: purchasesAgg._sum.grandTotal || 0,
+        periodCollections: collectionsAgg._sum.amount || 0,
+        periodExpenses: expensesAgg._sum.amount || 0,
+        invoiceCount: salesAgg._count.id || 0,
+        purchaseCount: purchasesAgg._count.id || 0,
+
+        // Receivables & Payables
         receivables: totalReceivables._sum.balanceDue || 0,
         payables: totalPayables._sum.balanceDue || 0,
+
+        // Services metrics
         servicesDueToday,
-        servicesOverdue,
+        overdueServicesCount,
+        upcomingServicesCount,
+
+        // Inventory
         lowStockCount,
       },
-      monthlyCharts: monthlyData,
+      monthlyCharts: chartData,
       topItems,
       lowStockItems: filteredLowStock,
     });

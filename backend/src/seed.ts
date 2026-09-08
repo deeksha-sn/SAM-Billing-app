@@ -3,6 +3,65 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+function getDistributedDate(index: number): Date {
+  const now = new Date();
+  // Index 0 & 1: Today (0 days ago)
+  // Index 2 & 3: This Week (2 & 4 days ago)
+  // Index 4 & 5: This Month (6 & 7 days ago)
+  // Index 6: Aug 2026 (~25 days ago)
+  // Index 7: Jul 2026 (~55 days ago)
+  // Index 8: Jun 2026 (~85 days ago)
+  // Index 9: May 2026 (~115 days ago)
+  const offsets = [0, 0, 2, 4, 6, 7, 25, 55, 85, 115];
+  const daysAgo = offsets[index % offsets.length];
+  return new Date(now.getTime() - daysAgo * 86400000);
+}
+
+async function syncSampleDates() {
+  const invoiceNos = [
+    'SAM-26-27-0001', 'SAM-26-27-0002', 'SAM-26-27-0003', 'SAM-26-27-0004', 'SAM-26-27-0005',
+    'SAM-26-27-0006', 'SAM-26-27-0007', 'SAM-26-27-0008', 'SAM-26-27-0009', 'SAM-26-27-0010'
+  ];
+  for (let i = 0; i < invoiceNos.length; i++) {
+    const d = getDistributedDate(i);
+    await prisma.invoice.updateMany({ where: { invoiceNumber: invoiceNos[i] }, data: { invoiceDate: d } });
+    await prisma.payment.updateMany({ where: { referenceNo: `REF-${invoiceNos[i]}` }, data: { date: d } });
+  }
+
+  const quoNos = [
+    'QUO-26-27-0001', 'QUO-26-27-0002', 'QUO-26-27-0003', 'QUO-26-27-0004', 'QUO-26-27-0005',
+    'QUO-26-27-0006', 'QUO-26-27-0007', 'QUO-26-27-0008', 'QUO-26-27-0009', 'QUO-26-27-0010'
+  ];
+  for (let i = 0; i < quoNos.length; i++) {
+    const d = getDistributedDate(i);
+    await prisma.quotation.updateMany({ where: { quotationNumber: quoNos[i] }, data: { quotationDate: d } });
+  }
+
+  const dcNos = [
+    'DC-26-27-0001', 'DC-26-27-0002', 'DC-26-27-0003', 'DC-26-27-0004', 'DC-26-27-0005',
+    'DC-26-27-0006', 'DC-26-27-0007', 'DC-26-27-0008', 'DC-26-27-0009', 'DC-26-27-0010'
+  ];
+  for (let i = 0; i < dcNos.length; i++) {
+    const d = getDistributedDate(i);
+    await prisma.deliveryChallan.updateMany({ where: { challanNumber: dcNos[i] }, data: { challanDate: d } });
+  }
+
+  const purNos = [
+    'PUR-26-27-0001', 'PUR-26-27-0002', 'PUR-26-27-0003', 'PUR-26-27-0004', 'PUR-26-27-0005',
+    'PUR-26-27-0006', 'PUR-26-27-0007', 'PUR-26-27-0008', 'PUR-26-27-0009', 'PUR-26-27-0010'
+  ];
+  for (let i = 0; i < purNos.length; i++) {
+    const d = getDistributedDate(i);
+    await prisma.purchaseInvoice.updateMany({ where: { purchaseNumber: purNos[i] }, data: { purchaseDate: d } });
+  }
+
+  const expenses = await prisma.expense.findMany({ take: 10, orderBy: { createdAt: 'asc' } });
+  for (let i = 0; i < expenses.length; i++) {
+    const d = getDistributedDate(i);
+    await prisma.expense.update({ where: { id: expenses[i].id }, data: { date: d } });
+  }
+}
+
 export async function seedDatabase() {
   console.log('Checking database state for persistent development sample data...');
 
@@ -12,7 +71,8 @@ export async function seedDatabase() {
   const purchaseCount = await prisma.purchaseInvoice.count();
 
   if (invoiceCount >= 10 && challanCount >= 10 && purchaseCount >= 10) {
-    console.log(`Development database already contains full sample dataset (${invoiceCount} invoices, ${challanCount} challans, ${purchaseCount} purchases). Preserving database state.`);
+    console.log(`Development database already contains full sample dataset (${invoiceCount} invoices, ${challanCount} challans, ${purchaseCount} purchases). Syncing date distribution...`);
+    await syncSampleDates();
     return;
   }
 
@@ -108,7 +168,7 @@ export async function seedDatabase() {
     update: {},
     create: { name: 'Agricultural Machines', description: 'Finished farm machinery' },
   });
-  const catSpares = await prisma.category.upsert({
+  await prisma.category.upsert({
     where: { name: 'Motors & Spares' },
     update: {},
     create: { name: 'Motors & Spares', description: 'Electric motors and spare parts' },
@@ -340,13 +400,16 @@ export async function seedDatabase() {
   ];
 
   const dbInvoices: any[] = [];
-  for (const invDef of invoicesData) {
+  for (let idx = 0; idx < invoicesData.length; idx++) {
+    const invDef = invoicesData[idx];
     const party = dbParties[invDef.partyIndex];
     const farmer = invDef.farmerIndex !== null ? dbFarmers[invDef.farmerIndex] : null;
     const item = dbItems[invDef.itemIndex];
     if (!party || !item) continue;
 
     let existingInv = await prisma.invoice.findUnique({ where: { invoiceNumber: invDef.no } });
+    const targetDate = getDistributedDate(idx);
+
     if (!existingInv) {
       const taxable = invDef.qty * invDef.rate;
       const taxTotal = (taxable * invDef.gstRate) / 100;
@@ -360,7 +423,7 @@ export async function seedDatabase() {
         data: {
           invoiceNumber: invDef.no,
           financialYear: '2026-2027',
-          invoiceDate: new Date(Date.now() - (10 - invoicesData.indexOf(invDef)) * 86400000 * 3),
+          invoiceDate: targetDate,
           partyId: party.id,
           farmerId: farmer?.id || null,
           billingAddress: party.address,
@@ -411,7 +474,7 @@ export async function seedDatabase() {
               partyId: party.id,
               amount: invDef.paid,
               paymentMode: invDef.mode,
-              date: existingInv.invoiceDate,
+              date: targetDate,
               referenceNo: `REF-${invDef.no}`,
               notes: `Payment received for invoice ${invDef.no}`,
             },
@@ -436,13 +499,16 @@ export async function seedDatabase() {
     { no: 'QUO-26-27-0010', partyIndex: 1, farmerIndex: 5, itemIndex: 9, qty: 2, rate: 28000, gstRate: 12, isInter: false, status: 'ACTIVE' },
   ];
 
-  for (const qDef of quotationsData) {
+  for (let idx = 0; idx < quotationsData.length; idx++) {
+    const qDef = quotationsData[idx];
     const party = dbParties[qDef.partyIndex];
     const farmer = qDef.farmerIndex !== null ? dbFarmers[qDef.farmerIndex] : null;
     const item = dbItems[qDef.itemIndex];
     if (!party || !item) continue;
 
     let existingQ = await prisma.quotation.findUnique({ where: { quotationNumber: qDef.no } });
+    const targetDate = getDistributedDate(idx);
+
     if (!existingQ) {
       const taxable = qDef.qty * qDef.rate;
       const taxTotal = (taxable * qDef.gstRate) / 100;
@@ -455,7 +521,7 @@ export async function seedDatabase() {
         data: {
           quotationNumber: qDef.no,
           financialYear: '2026-2027',
-          quotationDate: new Date(Date.now() - (10 - quotationsData.indexOf(qDef)) * 86400000 * 2),
+          quotationDate: targetDate,
           partyId: party.id,
           farmerId: farmer?.id || null,
           customerStateCode: party.stateCode,
@@ -503,19 +569,22 @@ export async function seedDatabase() {
     { no: 'DC-26-27-0010', partyIndex: 1, farmerIndex: 5, itemIndex: 9, qty: 1, serial: 'CC-MINI-0010', vehicle: 'KA-14-M-9911', transport: 'Local Auto', status: 'CONFIRMED' },
   ];
 
-  for (const dcDef of challansData) {
+  for (let idx = 0; idx < challansData.length; idx++) {
+    const dcDef = challansData[idx];
     const party = dbParties[dcDef.partyIndex];
     const farmer = dcDef.farmerIndex !== null ? dbFarmers[dcDef.farmerIndex] : null;
     const item = dbItems[dcDef.itemIndex];
     if (!party || !item) continue;
 
     let existingDC = await prisma.deliveryChallan.findUnique({ where: { challanNumber: dcDef.no } });
+    const targetDate = getDistributedDate(idx);
+
     if (!existingDC) {
       await prisma.deliveryChallan.create({
         data: {
           challanNumber: dcDef.no,
           financialYear: '2026-2027',
-          challanDate: new Date(Date.now() - (10 - challansData.indexOf(dcDef)) * 86400000 * 2),
+          challanDate: targetDate,
           partyId: party.id,
           farmerId: farmer?.id || null,
           deliveryAddress: farmer?.shippingAddress || party.shippingAddress || party.address,
@@ -560,12 +629,15 @@ export async function seedDatabase() {
     { no: 'PUR-26-27-0010', supplierIndex: 10, itemIndex: 9, qty: 4, rate: 16500, gstRate: 12, isInter: false, paid: 73920, status: 'PAID' },
   ];
 
-  for (const pDef of purchasesData) {
+  for (let idx = 0; idx < purchasesData.length; idx++) {
+    const pDef = purchasesData[idx];
     const supplier = dbParties[pDef.supplierIndex] || dbParties[10];
     const item = dbItems[pDef.itemIndex];
     if (!supplier || !item) continue;
 
     let existingPur = await prisma.purchaseInvoice.findUnique({ where: { purchaseNumber: pDef.no } });
+    const targetDate = getDistributedDate(idx);
+
     if (!existingPur) {
       const taxable = pDef.qty * pDef.rate;
       const taxTotal = (taxable * pDef.gstRate) / 100;
@@ -579,7 +651,7 @@ export async function seedDatabase() {
           purchaseNumber: pDef.no,
           supplierInvoiceNo: `SUP-INV-${pDef.no.substring(10)}`,
           financialYear: '2026-2027',
-          purchaseDate: new Date(Date.now() - (10 - purchasesData.indexOf(pDef)) * 86400000 * 4),
+          purchaseDate: targetDate,
           partyId: supplier.id,
           deliveryLocation: supplier.address,
           supplierStateCode: supplier.stateCode,
@@ -632,7 +704,7 @@ export async function seedDatabase() {
 
   for (let i = 0; i < expensesData.length; i++) {
     const expDef = expensesData[i];
-    const expDate = new Date(Date.now() - (i + 1) * 86400000 * 2);
+    const expDate = getDistributedDate(i);
     const count = await prisma.expense.count({ where: { category: expDef.cat, amount: expDef.amt } });
     if (count === 0) {
       await prisma.expense.create({
@@ -647,5 +719,6 @@ export async function seedDatabase() {
     }
   }
 
+  await syncSampleDates();
   console.log('Seeding Smart Agro Machinerys database completed successfully!');
 }
