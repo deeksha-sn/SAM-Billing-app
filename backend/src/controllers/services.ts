@@ -181,8 +181,10 @@ export async function createServiceTask(req: AuthRequest, res: Response) {
 
     if (!machine) return res.status(404).json({ error: 'Machine record not found' });
 
+    const sDate = serviceDueDate ? new Date(serviceDueDate) : new Date();
+
     const result = await prisma.$transaction(async (tx) => {
-      const { docNumber } = await generateDocumentNumber('SERVICE', 'SRV', tx);
+      const { docNumber } = await generateDocumentNumber('SERVICE', sDate, tx);
 
       const task = await tx.serviceTask.create({
         data: {

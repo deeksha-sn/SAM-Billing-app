@@ -35,10 +35,11 @@ export async function createPayment(req: AuthRequest, res: Response) {
     const party = await prisma.party.findUnique({ where: { id: partyId } });
     if (!party) return res.status(404).json({ error: 'Party not found' });
 
+    const pDate = date ? new Date(date) : new Date();
     const pType = paymentType || 'CUSTOMER_PAYMENT';
 
     const result = await prisma.$transaction(async (tx) => {
-      const { docNumber, fy } = await generateDocumentNumber('RECEIPT', 'REC', tx);
+      const { docNumber, fy } = await generateDocumentNumber('RECEIPT', pDate, tx);
 
       const payment = await tx.payment.create({
         data: {

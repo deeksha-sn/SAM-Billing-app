@@ -327,150 +327,164 @@ export async function createInvoice(req: AuthRequest, res: Response) {
 
     const invDate = invoiceDate ? new Date(invoiceDate) : new Date();
 
-    // Execute atomic transaction for Invoice + Stock Deduction + Ledger
-    const invoice = await prisma.$transaction(async (tx) => {
-      const { docNumber, fy } = await generateDocumentNumber('INVOICE', invDate, tx);
+    // Execute atomic transaction for Invoice + Stock Deduction + Ledger with retry loop
+    let retries = 3;
+    let createdInvoice: any = null;
+    let lastErr: any = null;
 
-      const createdInvoice = await tx.invoice.create({
-        data: {
-          invoiceNumber: docNumber,
-          financialYear: fy,
-          invoiceDate: invDate,
-          partyId: party.id,
-          farmerId: farmerId || null,
-          billingAddress: party.address || party.village || '',
-          deliveryAddress: deliveryLocation || party.address || party.village || '',
-          deliveryLocation: deliveryLocation || null,
-          customerStateCode: party.stateCode || '29',
-          isInterState: isInterState,
-          ewayBillNo: ewayBillNo ? String(ewayBillNo).trim() : null,
-          placeOfSupply: placeOfSupply ? String(placeOfSupply).trim() : `${party.stateCode}-${party.state}`,
-          poNumber: poNumber ? String(poNumber).trim() : null,
-          poDate: poDate ? new Date(poDate) : null,
-          transportName: transportName ? String(transportName).trim() : null,
-          termsTemplateId: termsTemplateId || null,
-          termsSnapshot: formattedTermsSnapshot,
-          taxableAmount: totalTaxable,
-          cgstAmount: totalCgst,
-          sgstAmount: totalSgst,
-          igstAmount: totalIgst,
-          roundOffEnabled: isRoundOffOn,
-          roundOff: roundOff,
-          grandTotal: grandTotal,
-          amountPaid: initialPaid,
-          balanceDue: balanceDue,
-          paymentMode: paymentMode || 'Credit',
-          paymentTerms: paymentTerms || null,
-          dueDate: dueDate ? new Date(dueDate) : null,
-          status: invoiceStatus,
-          notes: notes || null,
-          createdById: req.user?.id || null,
-          items: {
-            create: processedItems,
-          },
-        },
-        include: {
-          party: true,
-          items: { include: { item: true } },
-          termsTemplate: true,
-        },
-      });
+    while (retries > 0 && !createdInvoice) {
+      try {
+        createdInvoice = await prisma.$transaction(async (tx) => {
+          const { docNumber, fy } = await generateDocumentNumber('INVOICE', invDate, tx);
 
-      // Handle Delivery Challan conversion link
-      if (deliveryChallanId) {
-        await tx.deliveryChallan.update({
-          where: { id: deliveryChallanId },
-          data: { status: 'CONVERTED_TO_INVOICE', invoiceId: createdInvoice.id },
-        });
-      }
-
-      // Check if stock deduction should apply
-      if (invoiceStatus !== 'DRAFT' && invoiceStatus !== 'CANCELLED') {
-        // Check delivery challan stock setting
-        let skipStockDeduction = false;
-        if (deliveryChallanId) {
-          const dc = await tx.deliveryChallan.findUnique({ where: { id: deliveryChallanId } });
-          if (dc && dc.affectsStock && dc.stockDeducted) {
-            // DC already deducted stock, skip duplicate deduction!
-            skipStockDeduction = true;
-          }
-        }
-
-        if (!skipStockDeduction) {
-          await applyInvoiceStockDeduction(tx, createdInvoice.id, docNumber, party.id, req.user?.id);
-        }
-      }
-
-      // Auto-register Machines with serial numbers if provided
-      for (const pItem of processedItems) {
-        if (pItem.serialNumber && pItem.serialNumber.trim()) {
-          const itemMaster = await tx.item.findUnique({ where: { id: pItem.itemId } });
-          if (itemMaster && itemMaster.type === 'FINISHED_MACHINE') {
-            const warStart = new Date();
-            const warEnd = new Date(warStart);
-            warEnd.setFullYear(warEnd.getFullYear() + 1); // 12 months default
-
-            await tx.machine.upsert({
-              where: { serialNumber: pItem.serialNumber.trim() },
-              update: {
-                partyId: party.id,
-                farmerId: farmerId || null,
-                invoiceId: createdInvoice.id,
-                saleDate: warStart,
+          const inv = await tx.invoice.create({
+            data: {
+              invoiceNumber: docNumber,
+              financialYear: fy,
+              invoiceDate: invDate,
+              partyId: party.id,
+              farmerId: farmerId || null,
+              billingAddress: party.address || party.village || '',
+              deliveryAddress: deliveryLocation || party.address || party.village || '',
+              deliveryLocation: deliveryLocation || null,
+              customerStateCode: party.stateCode || '29',
+              isInterState: isInterState,
+              ewayBillNo: ewayBillNo ? String(ewayBillNo).trim() : null,
+              placeOfSupply: placeOfSupply ? String(placeOfSupply).trim() : `${party.stateCode}-${party.state}`,
+              poNumber: poNumber ? String(poNumber).trim() : null,
+              poDate: poDate ? new Date(poDate) : null,
+              transportName: transportName ? String(transportName).trim() : null,
+              termsTemplateId: termsTemplateId || null,
+              termsSnapshot: formattedTermsSnapshot,
+              taxableAmount: totalTaxable,
+              cgstAmount: totalCgst,
+              sgstAmount: totalSgst,
+              igstAmount: totalIgst,
+              roundOffEnabled: isRoundOffOn,
+              roundOff: roundOff,
+              grandTotal: grandTotal,
+              amountPaid: initialPaid,
+              balanceDue: balanceDue,
+              paymentMode: paymentMode || 'Credit',
+              paymentTerms: paymentTerms || null,
+              dueDate: dueDate ? new Date(dueDate) : null,
+              status: invoiceStatus,
+              notes: notes || null,
+              createdById: req.user?.id || null,
+              items: {
+                create: processedItems,
               },
-              create: {
+            },
+            include: {
+              party: true,
+              items: { include: { item: true } },
+              termsTemplate: true,
+            },
+          });
+
+          // Handle Delivery Challan conversion link
+          if (deliveryChallanId) {
+            await tx.deliveryChallan.update({
+              where: { id: deliveryChallanId },
+              data: { status: 'CONVERTED_TO_INVOICE', invoiceId: inv.id },
+            });
+          }
+
+          // Check if stock deduction should apply
+          if (invoiceStatus !== 'DRAFT' && invoiceStatus !== 'CANCELLED') {
+            let skipStockDeduction = false;
+            if (deliveryChallanId) {
+              const dc = await tx.deliveryChallan.findUnique({ where: { id: deliveryChallanId } });
+              if (dc && dc.affectsStock && dc.stockDeducted) {
+                skipStockDeduction = true;
+              }
+            }
+
+            if (!skipStockDeduction) {
+              await applyInvoiceStockDeduction(tx, inv.id, docNumber, party.id, req.user?.id);
+            }
+          }
+
+          // Auto-register Machines with serial numbers if provided
+          for (const pItem of processedItems) {
+            if (pItem.serialNumber && pItem.serialNumber.trim()) {
+              const itemMaster = await tx.item.findUnique({ where: { id: pItem.itemId } });
+              if (itemMaster && itemMaster.type === 'FINISHED_MACHINE') {
+                const warStart = new Date();
+                const warEnd = new Date(warStart);
+                warEnd.setFullYear(warEnd.getFullYear() + 1);
+
+                await tx.machine.upsert({
+                  where: { serialNumber: pItem.serialNumber.trim() },
+                  update: {
+                    partyId: party.id,
+                    farmerId: farmerId || null,
+                    invoiceId: inv.id,
+                    saleDate: warStart,
+                  },
+                  create: {
+                    partyId: party.id,
+                    farmerId: farmerId || null,
+                    machineItemId: pItem.itemId,
+                    model: itemMaster.name,
+                    serialNumber: pItem.serialNumber.trim(),
+                    invoiceId: inv.id,
+                    saleDate: warStart,
+                    warrantyStart: warStart,
+                    warrantyEnd: warEnd,
+                    serviceIntervalDays: 90,
+                    nextServiceDate: new Date(warStart.getTime() + 90 * 24 * 60 * 60 * 1000),
+                    location: `${party.village || ''}, ${party.district || ''}`,
+                  },
+                });
+              }
+            }
+          }
+
+          // If initial payment made, record payment receipt
+          if (initialPaid > 0) {
+            const { docNumber: recNumber, fy: recFy } = await generateDocumentNumber('RECEIPT', invDate, tx);
+            await tx.payment.create({
+              data: {
+                receiptNo: recNumber,
+                financialYear: recFy,
+                paymentType: 'CUSTOMER_PAYMENT',
                 partyId: party.id,
-                farmerId: farmerId || null,
-                machineItemId: pItem.itemId,
-                model: itemMaster.name,
-                serialNumber: pItem.serialNumber.trim(),
-                invoiceId: createdInvoice.id,
-                saleDate: warStart,
-                warrantyStart: warStart,
-                warrantyEnd: warEnd,
-                serviceIntervalDays: 90,
-                nextServiceDate: new Date(warStart.getTime() + 90 * 24 * 60 * 60 * 1000),
-                location: `${party.village || ''}, ${party.district || ''}`,
+                date: invDate,
+                amount: initialPaid,
+                paymentMode: paymentMode || 'Cash',
+                notes: `Payment for Invoice ${docNumber}`,
+                allocations: JSON.stringify([{ invoiceId: inv.id, amount: initialPaid }]),
               },
             });
           }
-        }
-      }
 
-      // If initial payment made, record payment receipt
-      if (initialPaid > 0) {
-        const { docNumber: recNumber, fy: recFy } = await generateDocumentNumber('RECEIPT', 'REC', tx);
-        await tx.payment.create({
-          data: {
-            receiptNo: recNumber,
-            financialYear: recFy,
-            paymentType: 'CUSTOMER_PAYMENT',
-            partyId: party.id,
-            date: invoiceDate ? new Date(invoiceDate) : new Date(),
-            amount: initialPaid,
-            paymentMode: paymentMode || 'Cash',
-            notes: `Payment for Invoice ${docNumber}`,
-            allocations: JSON.stringify([{ invoiceId: createdInvoice.id, amount: initialPaid }]),
-          },
+          // Audit Log
+          await tx.auditLog.create({
+            data: {
+              userId: req.user?.id,
+              action: 'INVOICE_CREATE',
+              entityType: 'INVOICE',
+              entityId: inv.id,
+              reference: docNumber,
+              newValues: JSON.stringify({ grandTotal, status: invoiceStatus }),
+            },
+          });
+
+          return inv;
         });
+      } catch (err: any) {
+        lastErr = err;
+        retries--;
+        console.warn(`Invoice creation attempt failed (retries left: ${retries}):`, err.message || err);
       }
+    }
 
-      // Audit Log
-      await tx.auditLog.create({
-        data: {
-          userId: req.user?.id,
-          action: 'INVOICE_CREATE',
-          entityType: 'INVOICE',
-          entityId: createdInvoice.id,
-          reference: docNumber,
-          newValues: JSON.stringify({ grandTotal, status: invoiceStatus }),
-        },
-      });
+    if (!createdInvoice) {
+      return res.status(500).json({ error: lastErr?.message || 'Failed to generate a unique invoice number. Please try again.' });
+    }
 
-      return createdInvoice;
-    });
-
-    return res.status(201).json({ invoice });
+    return res.status(201).json({ invoice: createdInvoice });
   } catch (err: any) {
     console.error('Invoice Creation Error:', err);
     return res.status(500).json({ error: err.message });

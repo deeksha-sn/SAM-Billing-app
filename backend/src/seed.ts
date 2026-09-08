@@ -1,17 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { syncSequenceCounters } from './utils/numbering';
 
 const prisma = new PrismaClient();
 
 function getDistributedDate(index: number): Date {
   const now = new Date();
-  // Index 0 & 1: Today (0 days ago)
-  // Index 2 & 3: This Week (2 & 4 days ago)
-  // Index 4 & 5: This Month (6 & 7 days ago)
-  // Index 6: Aug 2026 (~25 days ago)
-  // Index 7: Jul 2026 (~55 days ago)
-  // Index 8: Jun 2026 (~85 days ago)
-  // Index 9: May 2026 (~115 days ago)
   const offsets = [0, 0, 2, 4, 6, 7, 25, 55, 85, 115];
   const daysAgo = offsets[index % offsets.length];
   return new Date(now.getTime() - daysAgo * 86400000);
@@ -60,6 +54,8 @@ async function syncSampleDates() {
     const d = getDistributedDate(i);
     await prisma.expense.update({ where: { id: expenses[i].id }, data: { date: d } });
   }
+
+  await syncSequenceCounters(prisma);
 }
 
 export async function seedDatabase() {
@@ -71,7 +67,7 @@ export async function seedDatabase() {
   const purchaseCount = await prisma.purchaseInvoice.count();
 
   if (invoiceCount >= 10 && challanCount >= 10 && purchaseCount >= 10) {
-    console.log(`Development database already contains full sample dataset (${invoiceCount} invoices, ${challanCount} challans, ${purchaseCount} purchases). Syncing date distribution...`);
+    console.log(`Development database already contains full sample dataset (${invoiceCount} invoices, ${challanCount} challans, ${purchaseCount} purchases). Syncing date distribution and sequence counters...`);
     await syncSampleDates();
     return;
   }
