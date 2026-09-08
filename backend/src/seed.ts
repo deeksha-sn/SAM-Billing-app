@@ -6,12 +6,13 @@ const prisma = new PrismaClient();
 export async function seedDatabase() {
   console.log('Checking database state for persistent development sample data...');
 
-  // 0. Idempotency Check: Do NOT overwrite, duplicate, or re-seed if invoices & parties already exist!
-  const existingInvoiceCount = await prisma.invoice.count();
-  const existingPartyCount = await prisma.party.count();
+  // 0. Idempotency Check: Do NOT overwrite, re-create, or duplicate if database ALREADY contains full dataset!
+  const invoiceCount = await prisma.invoice.count();
+  const challanCount = await prisma.deliveryChallan.count();
+  const purchaseCount = await prisma.purchaseInvoice.count();
 
-  if (existingInvoiceCount >= 10 && existingPartyCount >= 10) {
-    console.log(`Development database already contains data (${existingPartyCount} parties, ${existingInvoiceCount} invoices). Preserving current database state.`);
+  if (invoiceCount >= 10 && challanCount >= 10 && purchaseCount >= 10) {
+    console.log(`Development database already contains full sample dataset (${invoiceCount} invoices, ${challanCount} challans, ${purchaseCount} purchases). Preserving database state.`);
     return;
   }
 
