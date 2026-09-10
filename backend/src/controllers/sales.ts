@@ -246,8 +246,9 @@ export async function createInvoice(req: AuthRequest, res: Response) {
     if (!party) return res.status(404).json({ error: 'Customer not found' });
 
     const company = await prisma.companyProfile.findUnique({ where: { id: 'default' } });
-    const companyStateCode = company?.stateCode || '29';
-    const isInterState = isInterStateTransaction(party.stateCode, party.state, companyStateCode);
+    const companyStateCode = company?.stateCode || company?.state || '29';
+    const targetStateOrPos = placeOfSupply || party.stateCode || party.state || '29';
+    const isInterState = isInterStateTransaction(targetStateOrPos, party.state, companyStateCode);
 
     // Calculate item tax details
     let totalTaxable = 0;
@@ -544,8 +545,9 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
       if (!targetParty) throw new Error('Customer not found');
 
       const company = await tx.companyProfile.findUnique({ where: { id: 'default' } });
-      const companyStateCode = company?.stateCode || '29';
-      const isInterState = isInterStateTransaction(companyStateCode, targetParty.stateCode);
+      const companyStateCode = company?.stateCode || company?.state || '29';
+      const targetStateOrPos = placeOfSupply || invoice.placeOfSupply || targetParty.stateCode || targetParty.state || '29';
+      const isInterState = isInterStateTransaction(targetStateOrPos, targetParty.state, companyStateCode);
 
       let totalTaxable = invoice.taxableAmount;
       let totalCgst = invoice.cgstAmount;

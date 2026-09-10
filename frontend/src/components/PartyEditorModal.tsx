@@ -3,6 +3,7 @@ import { X, Save, UserCheck, UserPlus, Eye, Edit, Trash2, Search, MapPin, Phone 
 import { apiRequest } from '../api';
 import { FarmerEditorModal } from './FarmerEditorModal';
 import { ViewFarmerModal } from './ViewFarmerModal';
+import { INDIAN_STATES, getStateNameFromCode, extractStateFromGstin } from '../utils/gstHelper';
 
 interface PartyEditorModalProps {
   party?: any;
@@ -269,7 +270,15 @@ export const PartyEditorModal: React.FC<PartyEditorModalProps> = ({
               <input
                 type="text"
                 value={gstin}
-                onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  const clean = e.target.value.toUpperCase();
+                  setGstin(clean);
+                  const extracted = extractStateFromGstin(clean);
+                  if (extracted) {
+                    setStateCode(extracted.stateCode);
+                    setState(extracted.stateName);
+                  }
+                }}
                 placeholder="29AAAAA0000A1Z5"
                 className="w-full p-2.5 bg-white border border-gray-300 rounded-xl font-mono uppercase"
               />
@@ -329,21 +338,29 @@ export const PartyEditorModal: React.FC<PartyEditorModalProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block font-bold text-gray-700 mb-1">State & State Code</label>
+              <label className="block font-bold text-gray-700 mb-1">State & State Code *</label>
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  placeholder="State Name"
-                  className="w-full p-2.5 bg-white border border-gray-300 rounded-xl font-bold"
-                />
-                <input
-                  type="text"
+                <select
                   value={stateCode}
-                  onChange={(e) => setStateCode(e.target.value)}
-                  placeholder="Code"
-                  className="w-16 p-2.5 bg-white border border-gray-300 rounded-xl text-center font-mono font-bold"
+                  onChange={(e) => {
+                    const code = e.target.value;
+                    setStateCode(code);
+                    setState(getStateNameFromCode(code));
+                  }}
+                  className="w-full p-2.5 bg-white border border-gray-300 rounded-xl font-bold text-gray-900"
+                >
+                  {INDIAN_STATES.map((s) => (
+                    <option key={s.code} value={s.code}>
+                      {s.code} - {s.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  readOnly
+                  value={stateCode}
+                  className="w-16 p-2.5 bg-gray-100 border border-gray-300 rounded-xl text-center font-mono font-bold text-gray-700"
+                  title="GST State Code"
                 />
               </div>
             </div>

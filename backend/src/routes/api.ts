@@ -20,6 +20,8 @@ import { getExpenses, createExpense } from '../controllers/expenses';
 import { getDashboardStats, getGSTReport, getStockLedgerReport, getPartyLedgerReport, getProfitAndLossReport } from '../controllers/reports';
 import { globalSearch, createBackup, resetDemoData } from '../controllers/backup';
 
+import { getTemplates, getTemplateById, createTemplate, updateTemplate, deleteTemplate, setDefaultTemplate } from '../controllers/templates';
+
 const router = Router();
 
 // Public routes
@@ -42,6 +44,14 @@ router.get('/settings/system', getSystemSettings);
 router.put('/settings/system', authorize(['ADMIN']), updateSystemSetting);
 router.get('/settings/numbering', getDocumentNumberConfigs);
 router.put('/settings/numbering/:documentType', authorize(['ADMIN']), updateDocumentNumberConfig);
+
+// Bill Templates
+router.get('/templates', getTemplates);
+router.get('/templates/:id', getTemplateById);
+router.post('/templates', createTemplate);
+router.put('/templates/:id', updateTemplate);
+router.delete('/templates/:id', deleteTemplate);
+router.post('/templates/:id/set-default', setDefaultTemplate);
 
 // Terms & Conditions Master Templates
 router.get('/terms/templates', getTermsTemplates);

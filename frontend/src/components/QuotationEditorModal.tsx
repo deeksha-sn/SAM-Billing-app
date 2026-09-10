@@ -3,6 +3,7 @@ import { apiRequest } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { X, Plus, Trash2, Save, Layers, Building, HelpCircle, Check, FileText } from 'lucide-react';
 import { SearchablePartyCombobox } from './SearchablePartyCombobox';
+import { isInterStateTransaction, normalizeStateCode } from '../utils/gstHelper';
 
 interface QuotationEditorModalProps {
   quotation?: any;
@@ -286,7 +287,11 @@ export const QuotationEditorModal: React.FC<QuotationEditorModalProps> = ({
   };
 
   // Calculate live grand total
-  const isInterState = selectedParty ? selectedParty.stateCode !== '29' : false;
+  const isInterState = isInterStateTransaction(
+    selectedParty?.stateCode || selectedParty?.state || '29',
+    selectedParty?.state,
+    '29'
+  );
 
   let grandTotalCalculated = 0;
   items.forEach((line) => {
@@ -559,15 +564,28 @@ export const QuotationEditorModal: React.FC<QuotationEditorModalProps> = ({
                         {/* GST % */}
                         <td className="p-2">
                           <select
-                            value={row.gstRate}
-                            onChange={(e) => handleItemRowChange(idx, 'gstRate', Number(e.target.value))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs text-center font-semibold"
+                            value={row.isExempt ? 'EXEMPT' : row.gstRate}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === 'EXEMPT') {
+                                handleItemRowChange(idx, 'gstRate', 0);
+                                handleItemRowChange(idx, 'isExempt', true);
+                              } else {
+                                handleItemRowChange(idx, 'gstRate', Number(val) || 0);
+                                handleItemRowChange(idx, 'isExempt', false);
+                              }
+                            }}
+                            className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs text-center font-bold font-mono"
                           >
                             <option value={0}>0%</option>
+                            <option value={0.25}>0.25%</option>
+                            <option value={3}>3%</option>
                             <option value={5}>5%</option>
                             <option value={12}>12%</option>
                             <option value={18}>18%</option>
                             <option value={28}>28%</option>
+                            <option value={40}>40%</option>
+                            <option value="EXEMPT">Exempted</option>
                           </select>
                         </td>
 

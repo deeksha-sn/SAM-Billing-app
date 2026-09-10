@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { QuickAddPartyModal } from './QuickAddPartyModal';
 import { QuickAddItemModal } from './QuickAddItemModal';
 import { SearchablePartyCombobox } from './SearchablePartyCombobox';
+import { INDIAN_STATES, getStateNameFromCode, isInterStateTransaction, normalizeStateCode } from '../utils/gstHelper';
 
 interface InvoiceEditorModalProps {
   invoice?: any;
@@ -159,17 +160,18 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
   };
 
   const selectedParty = parties.find((p) => p.id === selectedPartyId) || invoice?.party;
-  const companyStateCode = company?.stateCode || '29';
-  const isInterState = selectedParty
-    ? String(selectedParty.stateCode || '29') !== String(companyStateCode)
-    : false;
+  const companyStateCode = company?.stateCode || company?.state || '29';
+  const posCode = placeOfSupply || selectedParty?.stateCode || selectedParty?.state || '29';
+  const isInterState = isInterStateTransaction(posCode, selectedParty?.state, companyStateCode);
 
   // Handle party change
   const handlePartySelect = (partyId: string) => {
     setSelectedPartyId(partyId);
     const p = parties.find((item) => item.id === partyId);
     if (p) {
-      setPlaceOfSupply(`${p.stateCode || '29'}-${p.state || 'Karnataka'}`);
+      const stCode = normalizeStateCode(p.stateCode || p.state || '29');
+      const stName = p.state || getStateNameFromCode(stCode);
+      setPlaceOfSupply(`${stCode}-${stName}`);
     }
   };
 
@@ -519,13 +521,17 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
 
               <div>
                 <label className="block font-bold text-slate-700 uppercase text-[10px] mb-1">Place of Supply *</label>
-                <input
-                  type="text"
+                <select
                   value={placeOfSupply}
                   onChange={(e) => setPlaceOfSupply(e.target.value)}
-                  placeholder="e.g. 29-Karnataka"
-                  className="w-full p-2.5 border rounded-xl text-slate-900 bg-white font-semibold"
-                />
+                  className="w-full p-2.5 border rounded-xl text-slate-900 bg-white font-semibold text-xs"
+                >
+                  {INDIAN_STATES.map((s) => (
+                    <option key={s.code} value={`${s.code}-${s.name}`}>
+                      {s.code}-{s.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -670,12 +676,30 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
                         </td>
 
                         <td className="p-2">
-                          <input
-                            type="number"
-                            value={line.gstRate}
-                            onChange={(e) => handleLineValueChange(idx, 'gstRate', parseFloat(e.target.value) || 0)}
-                            className="w-full p-2 border rounded-lg text-right font-mono"
-                          />
+                          <select
+                            value={line.isExempt ? 'EXEMPT' : line.gstRate}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === 'EXEMPT') {
+                                handleLineValueChange(idx, 'gstRate', 0);
+                                handleLineValueChange(idx, 'isExempt', true);
+                              } else {
+                                handleLineValueChange(idx, 'gstRate', parseFloat(val) || 0);
+                                handleLineValueChange(idx, 'isExempt', false);
+                              }
+                            }}
+                            className="w-full p-2 border rounded-lg text-right font-mono font-bold bg-white text-xs"
+                          >
+                            <option value={0}>0%</option>
+                            <option value={0.25}>0.25%</option>
+                            <option value={3}>3%</option>
+                            <option value={5}>5%</option>
+                            <option value={12}>12%</option>
+                            <option value={18}>18%</option>
+                            <option value={28}>28%</option>
+                            <option value={40}>40%</option>
+                            <option value="EXEMPT">Exempted</option>
+                          </select>
                         </td>
 
                         <td className="p-2 text-right font-mono font-bold text-slate-900">

@@ -719,3 +719,14 @@ model AuditLog {
 
   user User? @relation(fields: [userId], references: [id])
 }
+
+model BillTemplate {
+  id           String   @id @default(uuid())
+  name         String
+  documentType String   // INVOICE, QUOTATION, DELIVERY_CHALLAN, PURCHASE
+  isDefault    Boolean  @default(false)
+  fieldsConfig String   // JSON string of BillFieldsConfig object
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+

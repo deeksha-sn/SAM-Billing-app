@@ -143,6 +143,14 @@ export async function createParty(req: AuthRequest, res: Response) {
       }
     }
 
+    const {
+      normalizeStateCode,
+      getStateNameFromCode,
+    } = require('../utils/gstHelper');
+
+    const cleanStateCode = normalizeStateCode(stateCode || state || '29');
+    const cleanStateName = getStateNameFromCode(cleanStateCode);
+
     const party = await prisma.party.create({
       data: {
         name,
@@ -157,8 +165,8 @@ export async function createParty(req: AuthRequest, res: Response) {
         village,
         taluk,
         district,
-        state: state || 'Karnataka',
-        stateCode: stateCode || '29',
+        state: cleanStateName,
+        stateCode: cleanStateCode,
         pincode,
         gstin,
         pan,
@@ -180,8 +188,12 @@ export async function updateParty(req: AuthRequest, res: Response) {
     const { id } = req.params;
     const data = req.body;
 
-    if (data.openingBalance !== undefined) data.openingBalance = Number(data.openingBalance);
-    if (data.creditLimit !== undefined) data.creditLimit = Number(data.creditLimit);
+    if (data.stateCode !== undefined || data.state !== undefined) {
+      const { normalizeStateCode, getStateNameFromCode } = require('../utils/gstHelper');
+      const cleanCode = normalizeStateCode(data.stateCode || data.state || '29');
+      data.stateCode = cleanCode;
+      data.state = getStateNameFromCode(cleanCode);
+    }
 
     const party = await prisma.party.update({
       where: { id },

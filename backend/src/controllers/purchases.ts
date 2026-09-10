@@ -75,8 +75,8 @@ export async function createPurchase(req: AuthRequest, res: Response) {
     if (!supplier) return res.status(404).json({ error: 'Supplier not found' });
 
     const company = await prisma.companyProfile.findUnique({ where: { id: 'default' } });
-    const companyStateCode = company?.stateCode || '29';
-    const isInterState = isInterStateTransaction(supplier.stateCode, supplier.state, companyStateCode);
+    const companyStateCode = company?.stateCode || company?.state || '29';
+    const isInterState = isInterStateTransaction(supplier.stateCode || supplier.state, supplier.state, companyStateCode);
 
     let totalTaxable = 0;
     let totalCgst = 0;
@@ -293,8 +293,8 @@ export async function updatePurchase(req: AuthRequest, res: Response) {
       if (!supplier) throw new Error('Supplier not found');
 
       const company = await tx.companyProfile.findUnique({ where: { id: 'default' } });
-      const companyStateCode = company?.stateCode || '29';
-      const isInterState = isInterStateTransaction(companyStateCode, supplier.stateCode);
+      const companyStateCode = company?.stateCode || company?.state || '29';
+      const isInterState = isInterStateTransaction(supplier.stateCode || supplier.state, supplier.state, companyStateCode);
 
       // STEP 1: Reverse OLD purchase stock addition (decrement stock)
       for (const oldLine of existing.items) {

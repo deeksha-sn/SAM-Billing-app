@@ -364,15 +364,28 @@ export const PurchaseEditorModal: React.FC<PurchaseEditorModalProps> = ({
                         </td>
                         <td className="p-2">
                           <select
-                            value={row.gstRate}
-                            onChange={(e) => handleLineFieldChange(idx, 'gstRate', Number(e.target.value))}
-                            className="w-full p-2 bg-white border border-gray-300 rounded-lg text-center font-bold"
+                            value={row.isExempt ? 'EXEMPT' : row.gstRate}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === 'EXEMPT') {
+                                handleLineFieldChange(idx, 'gstRate', 0);
+                                handleLineFieldChange(idx, 'isExempt', true);
+                              } else {
+                                handleLineFieldChange(idx, 'gstRate', Number(val) || 0);
+                                handleLineFieldChange(idx, 'isExempt', false);
+                              }
+                            }}
+                            className="w-full p-2 bg-white border border-gray-300 rounded-lg text-center font-bold font-mono text-xs"
                           >
-                            <option value="0">0%</option>
-                            <option value="5">5%</option>
-                            <option value="12">12%</option>
-                            <option value="18">18%</option>
-                            <option value="28">28%</option>
+                            <option value={0}>0%</option>
+                            <option value={0.25}>0.25%</option>
+                            <option value={3}>3%</option>
+                            <option value={5}>5%</option>
+                            <option value={12}>12%</option>
+                            <option value={18}>18%</option>
+                            <option value={28}>28%</option>
+                            <option value={40}>40%</option>
+                            <option value="EXEMPT">Exempted</option>
                           </select>
                         </td>
                         <td className="p-3 text-right font-mono font-bold text-gray-900">

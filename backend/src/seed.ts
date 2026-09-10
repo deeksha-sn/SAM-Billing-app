@@ -56,28 +56,110 @@ async function syncSampleDates() {
   }
 
   await syncSequenceCounters(prisma);
+  await seedDefaultBillTemplates(prisma);
+}
+
+export async function seedDefaultBillTemplates(db: PrismaClient = prisma) {
+  const count = await db.billTemplate.count();
+  if (count > 0) return;
+
+  console.log('Seeding persistent default bill templates...');
+
+  const {
+    DEFAULT_INVOICE_FIELDS,
+    DEFAULT_QUOTATION_FIELDS,
+    DEFAULT_CHALLAN_FIELDS,
+    DEFAULT_PURCHASE_FIELDS,
+  } = require('./controllers/templates');
+
+  const templates = [
+    // INVOICE Templates
+    {
+      name: 'Standard Tax Invoice',
+      documentType: 'INVOICE',
+      isDefault: true,
+      fieldsConfig: JSON.stringify(DEFAULT_INVOICE_FIELDS),
+    },
+    {
+      name: 'Detailed Machinery Invoice',
+      documentType: 'INVOICE',
+      isDefault: false,
+      fieldsConfig: JSON.stringify({
+        ...DEFAULT_INVOICE_FIELDS,
+        showFreeQuantity: true,
+        showVehicleNumber: true,
+        showDeliveryLocation: true,
+      }),
+    },
+    {
+      name: 'Simple Invoice',
+      documentType: 'INVOICE',
+      isDefault: false,
+      fieldsConfig: JSON.stringify({
+        ...DEFAULT_INVOICE_FIELDS,
+        showCgst: false,
+        showSgst: false,
+        showIgst: false,
+        showHsn: false,
+        showPoNumber: false,
+        showPoDate: false,
+        showEwayBill: false,
+      }),
+    },
+
+    // QUOTATION Templates
+    {
+      name: 'Standard Quotation',
+      documentType: 'QUOTATION',
+      isDefault: true,
+      fieldsConfig: JSON.stringify(DEFAULT_QUOTATION_FIELDS),
+    },
+    {
+      name: 'Detailed Machinery Quotation',
+      documentType: 'QUOTATION',
+      isDefault: false,
+      fieldsConfig: JSON.stringify({
+        ...DEFAULT_QUOTATION_FIELDS,
+        showFreeQuantity: true,
+        showVehicleNumber: true,
+      }),
+    },
+
+    // DELIVERY CHALLAN Templates
+    {
+      name: 'Standard Delivery Challan',
+      documentType: 'DELIVERY_CHALLAN',
+      isDefault: true,
+      fieldsConfig: JSON.stringify(DEFAULT_CHALLAN_FIELDS),
+    },
+
+    // PURCHASE Templates
+    {
+      name: 'Standard Purchase Invoice',
+      documentType: 'PURCHASE',
+      isDefault: true,
+      fieldsConfig: JSON.stringify(DEFAULT_PURCHASE_FIELDS),
+    },
+  ];
+
+  for (const t of templates) {
+    await db.billTemplate.create({ data: t });
+  }
+
+  console.log('Default bill templates seeded successfully!');
 }
 
 export async function seedDatabase() {
   console.log('Checking database state for persistent development sample data...');
 
-  // 0. Idempotency Check: Do NOT overwrite, re-create, or duplicate if database ALREADY contains full dataset!
-  const invoiceCount = await prisma.invoice.count();
-  const challanCount = await prisma.deliveryChallan.count();
-  const purchaseCount = await prisma.purchaseInvoice.count();
-
-  if (invoiceCount >= 10 && challanCount >= 10 && purchaseCount >= 10) {
-    console.log(`Development database already contains full sample dataset (${invoiceCount} invoices, ${challanCount} challans, ${purchaseCount} purchases). Syncing date distribution and sequence counters...`);
-    await syncSampleDates();
-    return;
-  }
-
-  console.log('Seeding Smart Agro Machinerys database with persistent development sample data...');
-
   // 1. Company Profile
   await prisma.companyProfile.upsert({
     where: { id: 'default' },
-    update: {},
+    update: {
+      state: 'Karnataka',
+      stateCode: '29',
+      gstin: '29AAACS1234F1Z9',
+    },
     create: {
       id: 'default',
       businessName: 'Smart Agro Machinerys',
@@ -95,6 +177,19 @@ export async function seedDatabase() {
       upiId: 'smartagro@cnrb',
     },
   });
+
+  // 0. Idempotency Check: Do NOT overwrite, re-create, or duplicate if database ALREADY contains full dataset!
+  const invoiceCount = await prisma.invoice.count();
+  const challanCount = await prisma.deliveryChallan.count();
+  const purchaseCount = await prisma.purchaseInvoice.count();
+
+  if (invoiceCount >= 10 && challanCount >= 10 && purchaseCount >= 10) {
+    console.log(`Development database already contains full sample dataset (${invoiceCount} invoices, ${challanCount} challans, ${purchaseCount} purchases). Syncing date distribution and sequence counters...`);
+    await syncSampleDates();
+    return;
+  }
+
+  console.log('Seeding Smart Agro Machinerys database with persistent development sample data...');
 
   // 2. System Settings
   await prisma.systemSettings.upsert({

@@ -64,6 +64,7 @@ export async function createQuotation(req: AuthRequest, res: Response) {
       termsTemplateId,
       termsSnapshot,
       status,
+      placeOfSupply,
     } = req.body;
 
     if (!partyId) {
@@ -78,8 +79,9 @@ export async function createQuotation(req: AuthRequest, res: Response) {
     if (!party) return res.status(404).json({ error: 'Customer not found' });
 
     const company = await prisma.companyProfile.findUnique({ where: { id: 'default' } });
-    const companyStateCode = company?.stateCode || '29';
-    const isInterState = isInterStateTransaction(party.stateCode, party.state, companyStateCode);
+    const companyStateCode = company?.stateCode || company?.state || '29';
+    const targetStateOrPos = placeOfSupply || party.stateCode || party.state || '29';
+    const isInterState = isInterStateTransaction(targetStateOrPos, party.state, companyStateCode);
 
     let rawTotalTaxable = 0;
     let rawTotalCgst = 0;
@@ -220,6 +222,7 @@ export async function updateQuotation(req: AuthRequest, res: Response) {
       items,
       notes,
       status,
+      placeOfSupply,
     } = req.body;
 
     const existing = await prisma.quotation.findUnique({ where: { id }, include: { items: true } });
@@ -246,8 +249,9 @@ export async function updateQuotation(req: AuthRequest, res: Response) {
       if (!party) throw new Error('Customer not found');
 
       const company = await tx.companyProfile.findUnique({ where: { id: 'default' } });
-      const companyStateCode = company?.stateCode || '29';
-      const isInterState = isInterStateTransaction(companyStateCode, party.stateCode);
+      const companyStateCode = company?.stateCode || company?.state || '29';
+      const targetStateOrPos = placeOfSupply || (existing as any).placeOfSupply || party.stateCode || party.state || '29';
+      const isInterState = isInterStateTransaction(targetStateOrPos, party.state, companyStateCode);
 
       let totalTaxable = existing.taxableAmount;
       let totalCgst = existing.cgstAmount;
@@ -416,8 +420,65 @@ export async function convertQuotationToInvoice(req: AuthRequest, res: Response)
     const targetStatus = invoiceStatus || 'CONFIRMED';
 
     const invoice = await prisma.$transaction(async (tx) => {
-      // 1. Generate a NEW Sales Invoice Number (Independent sequence, e.g. SAM-26-27-0005)
+      // 1. Generate a NEW Sales Invoice Number
       const { docNumber, fy } = await generateDocumentNumber('INVOICE', new Date(), tx);
+
+      const company = await tx.companyProfile.findUnique({ where: { id: 'default' } });
+      const companyStateCode = company?.stateCode || company?.state || '29';
+      const targetStateOrPos = (quotation as any).placeOfSupply || quotation.customerStateCode || quotation.party.stateCode || quotation.party.state || '29';
+      const isInterState = isInterStateTransaction(targetStateOrPos, quotation.party.state, companyStateCode);
+
+      let totalTaxable = 0;
+      let totalCgst = 0;
+      let totalSgst = 0;
+      let totalIgst = 0;
+      let rawGrandTotal = 0;
+
+      const processedItems = quotation.items.map((qItem: any) => {
+        const qty = Math.max(0, Number(qItem.quantity) || 1);
+        const rate = Math.max(0, Number(qItem.rate) || 0);
+        const discountPercent = Math.max(0, Number(qItem.discountPercent) || 0);
+        const discountAmount = Math.max(0, Number(qItem.discountAmount) || 0);
+        const isExempt = qItem.isExempt || qItem.gstRate === 'EXEMPT';
+        const gstRateVal = isExempt ? 0 : Number(qItem.gstRate) || 0;
+
+        const calc = calculateItemGst({
+          quantity: qty,
+          rate: rate,
+          discountPercent: discountPercent,
+          discountAmount: discountAmount,
+          gstRate: gstRateVal,
+          isExempt: isExempt,
+          isInclusive: Boolean(qItem.isInclusive),
+          isInterState: isInterState,
+        });
+
+        totalTaxable += calc.taxableValue;
+        totalCgst += calc.cgstAmount;
+        totalSgst += calc.sgstAmount;
+        totalIgst += calc.igstAmount;
+        rawGrandTotal += calc.totalAmount;
+
+        return {
+          itemId: qItem.itemId,
+          itemName: qItem.itemName,
+          hsnSac: qItem.hsnSac,
+          unit: qItem.unit,
+          quantity: qty,
+          rate: rate,
+          discountPercent: discountPercent,
+          discountAmount: discountAmount,
+          taxableValue: calc.taxableValue,
+          gstRate: gstRateVal,
+          cgstAmount: calc.cgstAmount,
+          sgstAmount: calc.sgstAmount,
+          igstAmount: calc.igstAmount,
+          totalAmount: calc.totalAmount,
+        };
+      });
+
+      const grandTotal = Math.round(rawGrandTotal);
+      const roundOff = Math.round((grandTotal - rawGrandTotal) * 100) / 100;
 
       // 2. Create the Sales Invoice
       const createdInvoice = await tx.invoice.create({
@@ -428,37 +489,23 @@ export async function convertQuotationToInvoice(req: AuthRequest, res: Response)
           partyId: quotation.partyId,
           billingAddress: quotation.party.address || quotation.party.village || '',
           deliveryAddress: quotation.party.address || quotation.party.village || '',
-          customerStateCode: quotation.customerStateCode,
-          isInterState: quotation.isInterState,
-          taxableAmount: quotation.taxableAmount,
-          cgstAmount: quotation.cgstAmount,
-          sgstAmount: quotation.sgstAmount,
-          igstAmount: quotation.igstAmount,
-          roundOff: quotation.roundOff,
-          grandTotal: quotation.grandTotal,
+          customerStateCode: quotation.customerStateCode || quotation.party.stateCode || '29',
+          placeOfSupply: (quotation as any).placeOfSupply || `${quotation.customerStateCode || '29'}-${quotation.party.state || 'Karnataka'}`,
+          isInterState: isInterState,
+          taxableAmount: totalTaxable,
+          cgstAmount: totalCgst,
+          sgstAmount: totalSgst,
+          igstAmount: totalIgst,
+          roundOff: roundOff,
+          grandTotal: grandTotal,
           amountPaid: 0,
-          balanceDue: quotation.grandTotal,
+          balanceDue: grandTotal,
           paymentMode: 'Credit',
           status: targetStatus,
           notes: `Converted from Quotation ${quotation.quotationNumber}`,
           createdById: req.user?.id,
           items: {
-            create: quotation.items.map((qItem) => ({
-              itemId: qItem.itemId,
-              itemName: qItem.itemName,
-              hsnSac: qItem.hsnSac,
-              unit: qItem.unit,
-              quantity: qItem.quantity,
-              rate: qItem.rate,
-              discountPercent: qItem.discountPercent,
-              discountAmount: qItem.discountAmount,
-              taxableValue: qItem.taxableValue,
-              gstRate: qItem.gstRate,
-              cgstAmount: qItem.cgstAmount,
-              sgstAmount: qItem.sgstAmount,
-              igstAmount: qItem.igstAmount,
-              totalAmount: qItem.totalAmount,
-            })),
+            create: processedItems,
           },
         },
       });
