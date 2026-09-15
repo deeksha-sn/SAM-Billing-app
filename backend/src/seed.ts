@@ -1,62 +1,151 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { syncSequenceCounters } from './utils/numbering';
+import { processDailyServiceReminders } from './services/reminderScheduler';
 
 const prisma = new PrismaClient();
 
 function getDistributedDate(index: number): Date {
   const now = new Date();
-  const offsets = [0, 0, 2, 4, 6, 7, 25, 55, 85, 115];
+  const offsets = [0, 1, 2, 4, 6, 7, 25, 55, 85, 115];
   const daysAgo = offsets[index % offsets.length];
   return new Date(now.getTime() - daysAgo * 86400000);
 }
 
-async function syncSampleDates() {
-  const invoiceNos = [
-    'SAM-26-27-0001', 'SAM-26-27-0002', 'SAM-26-27-0003', 'SAM-26-27-0004', 'SAM-26-27-0005',
-    'SAM-26-27-0006', 'SAM-26-27-0007', 'SAM-26-27-0008', 'SAM-26-27-0009', 'SAM-26-27-0010'
+export async function ensureRelativeServiceReminders(db: PrismaClient = prisma) {
+  const today = new Date();
+  today.setHours(10, 0, 0, 0);
+
+  const getRelativeDate = (offsetDays: number) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + offsetDays);
+    return d;
+  };
+
+  // Fetch reference technicians & parties
+  const techKumar = await db.user.findFirst({ where: { username: 'kumar' } });
+  const techSuresh = await db.user.findFirst({ where: { username: 'suresh' } });
+  const techRavi = await db.user.findFirst({ where: { username: 'ravi' } });
+  const techRamesh = await db.user.findFirst({ where: { username: 'ramesh' } });
+
+  const parties = await db.party.findMany({ take: 10 });
+  const machines = await db.machine.findMany({ take: 10 });
+
+  if (parties.length === 0 || machines.length === 0) return;
+
+  const relativeTaskDefs = [
+    {
+      serviceNo: 'SRV-REM-TODAY-1',
+      offsetDays: 0,
+      status: 'SCHEDULED',
+      techId: techKumar?.id || techRavi?.id,
+      machineIndex: 0,
+      notes: 'Routine 90-day milking machine checkup due TODAY',
+    },
+    {
+      serviceNo: 'SRV-REM-TODAY-2',
+      offsetDays: 0,
+      status: 'SCHEDULED',
+      techId: techSuresh?.id || techKumar?.id,
+      machineIndex: 1,
+      notes: 'Heavy duty chaff cutter blade inspection due TODAY',
+    },
+    {
+      serviceNo: 'SRV-REM-3DAYS',
+      offsetDays: 3,
+      status: 'SCHEDULED',
+      techId: techSuresh?.id,
+      machineIndex: 2,
+      notes: 'Upcoming 3-day reminder milking bucket service',
+    },
+    {
+      serviceNo: 'SRV-REM-7DAYS',
+      offsetDays: 7,
+      status: 'SCHEDULED',
+      techId: techRavi?.id,
+      machineIndex: 3,
+      notes: 'Upcoming 7-day reminder battery sprayer pressure test',
+    },
+    {
+      serviceNo: 'SRV-REM-10DAYS',
+      offsetDays: 10,
+      status: 'SCHEDULED',
+      techId: techRamesh?.id,
+      machineIndex: 4,
+      notes: 'Upcoming 10-day reminder chaff cutter motor maintenance',
+    },
+    {
+      serviceNo: 'SRV-REM-20DAYS',
+      offsetDays: 20,
+      status: 'SCHEDULED',
+      techId: techRavi?.id,
+      machineIndex: 5,
+      notes: 'Upcoming 20-day reminder quarterly milking machine service',
+    },
+    {
+      serviceNo: 'SRV-REM-OVERDUE-1',
+      offsetDays: -4,
+      status: 'SCHEDULED',
+      techId: techSuresh?.id,
+      machineIndex: 6,
+      notes: 'Overdue daily reminder service (4 days overdue)',
+    },
+    {
+      serviceNo: 'SRV-REM-OVERDUE-2',
+      offsetDays: -8,
+      status: 'SCHEDULED',
+      techId: techRavi?.id,
+      machineIndex: 7,
+      notes: 'Overdue daily reminder service (8 days overdue)',
+    },
+    {
+      serviceNo: 'SRV-REM-UPCOMING-1',
+      offsetDays: 35,
+      status: 'SCHEDULED',
+      techId: techKumar?.id,
+      machineIndex: 8,
+      notes: 'Upcoming quarterly farm equipment maintenance',
+    },
+    {
+      serviceNo: 'SRV-REM-UPCOMING-2',
+      offsetDays: 50,
+      status: 'SCHEDULED',
+      techId: techRamesh?.id,
+      machineIndex: 9,
+      notes: 'Upcoming semi-annual engine oil & filter service',
+    },
   ];
-  for (let i = 0; i < invoiceNos.length; i++) {
-    const d = getDistributedDate(i);
-    await prisma.invoice.updateMany({ where: { invoiceNumber: invoiceNos[i] }, data: { invoiceDate: d } });
-    await prisma.payment.updateMany({ where: { referenceNo: `REF-${invoiceNos[i]}` }, data: { date: d } });
+
+  for (const def of relativeTaskDefs) {
+    const targetDueDate = getRelativeDate(def.offsetDays);
+    const m = machines[def.machineIndex % machines.length];
+    const p = parties[def.machineIndex % parties.length];
+
+    await db.serviceTask.upsert({
+      where: { serviceNo: def.serviceNo },
+      update: {
+        serviceDueDate: targetDueDate,
+      },
+      create: {
+        serviceNo: def.serviceNo,
+        machineId: m.id,
+        partyId: m.partyId || p.id,
+        farmerId: m.farmerId || null,
+        serialNumber: m.serialNumber,
+        serviceDueDate: targetDueDate,
+        assignedTechnicianId: def.techId || null,
+        status: def.status,
+        technicianNotes: def.notes,
+      },
+    });
   }
 
-  const quoNos = [
-    'QUO-26-27-0001', 'QUO-26-27-0002', 'QUO-26-27-0003', 'QUO-26-27-0004', 'QUO-26-27-0005',
-    'QUO-26-27-0006', 'QUO-26-27-0007', 'QUO-26-27-0008', 'QUO-26-27-0009', 'QUO-26-27-0010'
-  ];
-  for (let i = 0; i < quoNos.length; i++) {
-    const d = getDistributedDate(i);
-    await prisma.quotation.updateMany({ where: { quotationNumber: quoNos[i] }, data: { quotationDate: d } });
+  // Trigger daily reminder scheduler idempotently
+  try {
+    await processDailyServiceReminders();
+  } catch (err) {
+    console.error('Error running daily service reminder scheduler at startup:', err);
   }
-
-  const dcNos = [
-    'DC-26-27-0001', 'DC-26-27-0002', 'DC-26-27-0003', 'DC-26-27-0004', 'DC-26-27-0005',
-    'DC-26-27-0006', 'DC-26-27-0007', 'DC-26-27-0008', 'DC-26-27-0009', 'DC-26-27-0010'
-  ];
-  for (let i = 0; i < dcNos.length; i++) {
-    const d = getDistributedDate(i);
-    await prisma.deliveryChallan.updateMany({ where: { challanNumber: dcNos[i] }, data: { challanDate: d } });
-  }
-
-  const purNos = [
-    'PUR-26-27-0001', 'PUR-26-27-0002', 'PUR-26-27-0003', 'PUR-26-27-0004', 'PUR-26-27-0005',
-    'PUR-26-27-0006', 'PUR-26-27-0007', 'PUR-26-27-0008', 'PUR-26-27-0009', 'PUR-26-27-0010'
-  ];
-  for (let i = 0; i < purNos.length; i++) {
-    const d = getDistributedDate(i);
-    await prisma.purchaseInvoice.updateMany({ where: { purchaseNumber: purNos[i] }, data: { purchaseDate: d } });
-  }
-
-  const expenses = await prisma.expense.findMany({ take: 10, orderBy: { createdAt: 'asc' } });
-  for (let i = 0; i < expenses.length; i++) {
-    const d = getDistributedDate(i);
-    await prisma.expense.update({ where: { id: expenses[i].id }, data: { date: d } });
-  }
-
-  await syncSequenceCounters(prisma);
-  await seedDefaultBillTemplates(prisma);
 }
 
 export async function seedDefaultBillTemplates(db: PrismaClient = prisma) {
@@ -73,80 +162,15 @@ export async function seedDefaultBillTemplates(db: PrismaClient = prisma) {
   } = require('./controllers/templates');
 
   const templates = [
-    // INVOICE Templates
-    {
-      name: 'Standard Tax Invoice',
-      documentType: 'INVOICE',
-      isDefault: true,
-      fieldsConfig: JSON.stringify(DEFAULT_INVOICE_FIELDS),
-    },
-    {
-      name: 'Detailed Machinery Invoice',
-      documentType: 'INVOICE',
-      isDefault: false,
-      fieldsConfig: JSON.stringify({
-        ...DEFAULT_INVOICE_FIELDS,
-        showFreeQuantity: true,
-        showVehicleNumber: true,
-        showDeliveryLocation: true,
-      }),
-    },
-    {
-      name: 'Simple Invoice',
-      documentType: 'INVOICE',
-      isDefault: false,
-      fieldsConfig: JSON.stringify({
-        ...DEFAULT_INVOICE_FIELDS,
-        showCgst: false,
-        showSgst: false,
-        showIgst: false,
-        showHsn: false,
-        showPoNumber: false,
-        showPoDate: false,
-        showEwayBill: false,
-      }),
-    },
-
-    // QUOTATION Templates
-    {
-      name: 'Standard Quotation',
-      documentType: 'QUOTATION',
-      isDefault: true,
-      fieldsConfig: JSON.stringify(DEFAULT_QUOTATION_FIELDS),
-    },
-    {
-      name: 'Detailed Machinery Quotation',
-      documentType: 'QUOTATION',
-      isDefault: false,
-      fieldsConfig: JSON.stringify({
-        ...DEFAULT_QUOTATION_FIELDS,
-        showFreeQuantity: true,
-        showVehicleNumber: true,
-      }),
-    },
-
-    // DELIVERY CHALLAN Templates
-    {
-      name: 'Standard Delivery Challan',
-      documentType: 'DELIVERY_CHALLAN',
-      isDefault: true,
-      fieldsConfig: JSON.stringify(DEFAULT_CHALLAN_FIELDS),
-    },
-
-    // PURCHASE Templates
-    {
-      name: 'Standard Purchase Invoice',
-      documentType: 'PURCHASE',
-      isDefault: true,
-      fieldsConfig: JSON.stringify(DEFAULT_PURCHASE_FIELDS),
-    },
+    { name: 'Standard Tax Invoice', documentType: 'INVOICE', isDefault: true, fieldsConfig: JSON.stringify(DEFAULT_INVOICE_FIELDS) },
+    { name: 'Standard Quotation', documentType: 'QUOTATION', isDefault: true, fieldsConfig: JSON.stringify(DEFAULT_QUOTATION_FIELDS) },
+    { name: 'Standard Delivery Challan', documentType: 'DELIVERY_CHALLAN', isDefault: true, fieldsConfig: JSON.stringify(DEFAULT_CHALLAN_FIELDS) },
+    { name: 'Standard Purchase Invoice', documentType: 'PURCHASE', isDefault: true, fieldsConfig: JSON.stringify(DEFAULT_PURCHASE_FIELDS) },
   ];
 
   for (const t of templates) {
     await db.billTemplate.create({ data: t });
   }
-
-  console.log('Default bill templates seeded successfully!');
 }
 
 export async function seedDatabase() {
@@ -178,19 +202,6 @@ export async function seedDatabase() {
     },
   });
 
-  // 0. Idempotency Check: Do NOT overwrite, re-create, or duplicate if database ALREADY contains full dataset!
-  const invoiceCount = await prisma.invoice.count();
-  const challanCount = await prisma.deliveryChallan.count();
-  const purchaseCount = await prisma.purchaseInvoice.count();
-
-  if (invoiceCount >= 10 && challanCount >= 10 && purchaseCount >= 10) {
-    console.log(`Development database already contains full sample dataset (${invoiceCount} invoices, ${challanCount} challans, ${purchaseCount} purchases). Syncing date distribution and sequence counters...`);
-    await syncSampleDates();
-    return;
-  }
-
-  console.log('Seeding Smart Agro Machinerys database with persistent development sample data...');
-
   // 2. System Settings
   await prisma.systemSettings.upsert({
     where: { key: 'delivery_challan_affects_stock' },
@@ -198,7 +209,24 @@ export async function seedDatabase() {
     create: { key: 'delivery_challan_affects_stock', value: 'YES', description: 'Whether final Delivery Challan deducts stock' },
   });
 
-  // 3. Default Users
+  // 3. Document Number Configs
+  const docConfigs = [
+    { documentType: 'INVOICE', prefix: 'SAM', pattern: 'SAM-{FY}-{NUMBER}', paddingDigits: 4, nextNumber: 11 },
+    { documentType: 'QUOTATION', prefix: 'QUO', pattern: 'QUO-{FY}-{NUMBER}', paddingDigits: 4, nextNumber: 11 },
+    { documentType: 'DELIVERY_CHALLAN', prefix: 'DC', pattern: 'DC-{FY}-{NUMBER}', paddingDigits: 4, nextNumber: 11 },
+    { documentType: 'PURCHASE', prefix: 'PUR', pattern: 'PUR-{FY}-{NUMBER}', paddingDigits: 4, nextNumber: 11 },
+    { documentType: 'SERVICE', prefix: 'SRV', pattern: 'SRV-{FY}-{NUMBER}', paddingDigits: 4, nextNumber: 11 },
+  ];
+
+  for (const cfg of docConfigs) {
+    await prisma.documentNumberConfig.upsert({
+      where: { documentType: cfg.documentType },
+      update: {},
+      create: cfg,
+    });
+  }
+
+  // 4. Users & Technicians with Location Data
   const adminPass = await bcrypt.hash('admin123', 10);
   const officePass = await bcrypt.hash('office123', 10);
   const techPass = await bcrypt.hash('tech123', 10);
@@ -229,43 +257,116 @@ export async function seedDatabase() {
 
   const techRavi = await prisma.user.upsert({
     where: { username: 'ravi' },
-    update: {},
+    update: {
+      address: 'APMC Yard Road',
+      taluk: 'Haveri',
+      district: 'Haveri',
+      pincode: '581110',
+      serviceAreaPincodes: '581110, 581115, 572101, 572201',
+    },
     create: {
       name: 'Ravi Technician',
       username: 'ravi',
       mobile: '9844099111',
       email: 'ravi@smartagro.com',
       passwordHash: techPass,
-      role: 'SERVICE_TECHNICIAN',
+      role: 'TECHNICIAN',
+      address: 'APMC Yard Road',
+      state: 'Karnataka',
+      district: 'Haveri',
+      taluk: 'Haveri',
+      pincode: '581110',
+      serviceAreaPincodes: '581110, 581115, 572101, 572201',
+      active: true,
     },
   });
 
   const techKumar = await prisma.user.upsert({
     where: { username: 'kumar' },
-    update: {},
+    update: {
+      address: 'Dairy Circle Road',
+      taluk: 'Tumkur',
+      district: 'Tumkur',
+      pincode: '572101',
+      serviceAreaPincodes: '572101, 572102, 572103, 572201',
+    },
     create: {
       name: 'Kumar Senior Technician',
       username: 'kumar',
       mobile: '9844099222',
       email: 'kumar@smartagro.com',
       passwordHash: techPass,
-      role: 'SERVICE_TECHNICIAN',
+      role: 'TECHNICIAN',
+      address: 'Dairy Circle Road',
+      state: 'Karnataka',
+      district: 'Tumkur',
+      taluk: 'Tumkur',
+      pincode: '572101',
+      serviceAreaPincodes: '572101, 572102, 572103, 572201',
+      active: true,
     },
   });
 
-  // 4. Categories
+  const techSuresh = await prisma.user.upsert({
+    where: { username: 'suresh' },
+    update: {
+      address: 'Bypass Highway',
+      taluk: 'Tiptur',
+      district: 'Tumkur',
+      pincode: '572201',
+      serviceAreaPincodes: '572201, 572202, 572203',
+    },
+    create: {
+      name: 'Suresh Field Technician',
+      username: 'suresh',
+      mobile: '9844099333',
+      email: 'suresh@smartagro.com',
+      passwordHash: techPass,
+      role: 'TECHNICIAN',
+      address: 'Bypass Highway',
+      state: 'Karnataka',
+      district: 'Tumkur',
+      taluk: 'Tiptur',
+      pincode: '572201',
+      serviceAreaPincodes: '572201, 572202, 572203',
+      active: true,
+    },
+  });
+
+  const techRamesh = await prisma.user.upsert({
+    where: { username: 'ramesh' },
+    update: {
+      address: 'Station Road',
+      taluk: 'Mandya',
+      district: 'Mandya',
+      pincode: '571401',
+      serviceAreaPincodes: '571401, 571402',
+    },
+    create: {
+      name: 'Ramesh Agro Specialist',
+      username: 'ramesh',
+      mobile: '9844099444',
+      email: 'ramesh@smartagro.com',
+      passwordHash: techPass,
+      role: 'TECHNICIAN',
+      address: 'Station Road',
+      state: 'Karnataka',
+      district: 'Mandya',
+      taluk: 'Mandya',
+      pincode: '571401',
+      serviceAreaPincodes: '571401, 571402',
+      active: true,
+    },
+  });
+
+  // 5. Categories
   const catMachines = await prisma.category.upsert({
     where: { name: 'Agricultural Machines' },
     update: {},
     create: { name: 'Agricultural Machines', description: 'Finished farm machinery' },
   });
-  await prisma.category.upsert({
-    where: { name: 'Motors & Spares' },
-    update: {},
-    create: { name: 'Motors & Spares', description: 'Electric motors and spare parts' },
-  });
 
-  // 5. Items / Products (20+ Items)
+  // 6. Items / Products (20+ Items)
   const itemsData = [
     { sku: 'CC-01', name: 'Heavy Duty Chaff Cutter 2HP', type: 'FINISHED_MACHINE', hsnSac: '8436', gstRate: 18.0, purchasePrice: 22000, sellingPrice: 45000, currentStock: 15, unit: 'Nos' },
     { sku: 'MM-400S', name: 'Milking Machine Double Bucket 400S', type: 'FINISHED_MACHINE', hsnSac: '8434', gstRate: 12.0, purchasePrice: 38000, sellingPrice: 65000, currentStock: 10, unit: 'Nos' },
@@ -311,31 +412,31 @@ export async function seedDatabase() {
     dbItems.push(item);
   }
 
-  // 6. Parties (20 Parties - 10 Customers + 10 Suppliers across KA, MH, TN)
+  // 7. Parties (10 Customers + 10 Suppliers across KA, MH, TN)
   const partiesData = [
     // Customers (10)
-    { name: 'Akshayakalpa Farms & Foods Pvt Ltd', type: 'CUSTOMER', customerType: 'BUSINESS', mobile: '9620409800', address: 'Tiptur Road, Dairy Division', state: 'Karnataka', stateCode: '29', pincode: '572201', gstin: '29AICA4264B1ZU' },
-    { name: 'Sahyadri Agro Producers Co-op', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9845011999', address: 'APMC Yard, Main Road', state: 'Karnataka', stateCode: '29', pincode: '577201', gstin: '29AAACS9876K1Z1' },
-    { name: 'Kaveri Milk Dairy & Farm', type: 'CUSTOMER', customerType: 'BUSINESS', mobile: '9741033777', address: 'Bypass Road, Dairy Circle', state: 'Karnataka', stateCode: '29', pincode: '573201', gstin: '29AABCK1122M1Z3' },
-    { name: 'Venkateshwara Agro Traders', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9822088777', address: 'Market Yard, Kolhapur', state: 'Maharashtra', stateCode: '27', pincode: '416001', gstin: '27AAACV5544N1Z5' },
-    { name: 'Coimbatore Farm Supplies', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9443077666', address: 'Trichy Road, Coimbatore', state: 'Tamil Nadu', stateCode: '33', pincode: '641018', gstin: '33AAACC9988P1Z7' },
-    { name: 'Vijayanagar Agro Agencies', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9448055444', address: 'Station Road, Hospet', state: 'Karnataka', stateCode: '29', pincode: '583201', gstin: '29AABCV7766R1Z9' },
-    { name: 'Sri Lakshmi Dairy Farm', type: 'CUSTOMER', customerType: 'FARMER', mobile: '9535055555', address: 'Farm House, Mandya Road', state: 'Karnataka', stateCode: '29', pincode: '571401', gstin: '' },
-    { name: 'Malnad Farmers Association', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9844077888', address: 'Main Road, Chikkamagaluru', state: 'Karnataka', stateCode: '29', pincode: '577101', gstin: '29AAACM4455Q1Z2' },
-    { name: 'Krishna Valley Dairy Farm', type: 'CUSTOMER', customerType: 'BUSINESS', mobile: '9823066555', address: 'Sangli Road, Miraj', state: 'Maharashtra', stateCode: '27', pincode: '416410', gstin: '27AAACK1122S1Z4' },
-    { name: 'Salem Farm Machinery Hub', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9442033444', address: 'Bypass Highway, Salem', state: 'Tamil Nadu', stateCode: '33', pincode: '636004', gstin: '33AAACS5566T1Z6' },
+    { name: 'Akshayakalpa Farms & Foods Pvt Ltd', type: 'CUSTOMER', customerType: 'BUSINESS', mobile: '9620409800', address: 'Tiptur Road, Dairy Division', village: 'Tiptur', taluk: 'Tiptur', district: 'Tumkur', state: 'Karnataka', stateCode: '29', pincode: '572201', gstin: '29AICA4264B1ZU', whatsappServiceReminders: true },
+    { name: 'Ramesh Farm House', type: 'CUSTOMER', customerType: 'FARMER', mobile: '9844011223', address: 'Plot 4, Haveri Main Road', village: 'Haveri', taluk: 'Haveri', district: 'Haveri', state: 'Karnataka', stateCode: '29', pincode: '581110', gstin: '', whatsappServiceReminders: true },
+    { name: 'Sahyadri Agro Producers Co-op', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9845011999', address: 'APMC Yard, Main Road', village: 'Shimoga', taluk: 'Shimoga', district: 'Shimoga', state: 'Karnataka', stateCode: '29', pincode: '577201', gstin: '29AAACS9876K1Z1', whatsappServiceReminders: true },
+    { name: 'Kaveri Milk Dairy & Farm', type: 'CUSTOMER', customerType: 'BUSINESS', mobile: '9741033777', address: 'Bypass Road, Dairy Circle', village: 'Hassan', taluk: 'Hassan', district: 'Hassan', state: 'Karnataka', stateCode: '29', pincode: '573201', gstin: '29AABCK1122M1Z3', whatsappServiceReminders: true },
+    { name: 'Venkateshwara Agro Traders', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9822088777', address: 'Market Yard, Kolhapur', village: 'Kolhapur', taluk: 'Kolhapur', district: 'Kolhapur', state: 'Maharashtra', stateCode: '27', pincode: '416001', gstin: '27AAACV5544N1Z5', whatsappServiceReminders: true },
+    { name: 'Coimbatore Farm Supplies', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9443077666', address: 'Trichy Road, Coimbatore', village: 'Coimbatore', taluk: 'Coimbatore', district: 'Coimbatore', state: 'Tamil Nadu', stateCode: '33', pincode: '641018', gstin: '33AAACC9988P1Z7', whatsappServiceReminders: true },
+    { name: 'Vijayanagar Agro Agencies', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9448055444', address: 'Station Road, Hospet', village: 'Hospet', taluk: 'Hospet', district: 'Vijayanagar', state: 'Karnataka', stateCode: '29', pincode: '583201', gstin: '29AABCV7766R1Z9', whatsappServiceReminders: true },
+    { name: 'Sri Lakshmi Dairy Farm', type: 'CUSTOMER', customerType: 'FARMER', mobile: '9535055555', address: 'Farm House, Mandya Road', village: 'Mandya', taluk: 'Mandya', district: 'Mandya', state: 'Karnataka', stateCode: '29', pincode: '571401', gstin: '', whatsappServiceReminders: true },
+    { name: 'Malnad Farmers Association', type: 'CUSTOMER', customerType: 'DEALER', mobile: '9844077888', address: 'Main Road, Chikkamagaluru', village: 'Chikkamagaluru', taluk: 'Chikkamagaluru', district: 'Chikkamagaluru', state: 'Karnataka', stateCode: '29', pincode: '577101', gstin: '29AAACM4455Q1Z2', whatsappServiceReminders: true },
+    { name: 'Krishna Valley Dairy Farm', type: 'CUSTOMER', customerType: 'BUSINESS', mobile: '9823066555', address: 'Sangli Road, Miraj', village: 'Miraj', taluk: 'Miraj', district: 'Sangli', state: 'Maharashtra', stateCode: '27', pincode: '416410', gstin: '27AAACK1122S1Z4', whatsappServiceReminders: true },
 
     // Suppliers (10)
-    { name: 'Bharat Machinery & Motors', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9880099887', address: 'Gokul Road, Hubli', state: 'Karnataka', stateCode: '29', pincode: '580030', gstin: '29AAACB1122D1Z4' },
-    { name: 'Karnataka Agro Spares Ltd', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9844088111', address: 'Peenya Industrial Area, Bangalore', state: 'Karnataka', stateCode: '29', pincode: '560058', gstin: '29AAACK3344E1Z6' },
-    { name: 'Deccan Dairy Equipment Co', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9823077111', address: 'MIDC Area, Pune', state: 'Maharashtra', stateCode: '27', pincode: '411026', gstin: '27AAACD7788F1Z8' },
-    { name: 'Kirloskar Oil Engines Ltd', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9822011223', address: 'Laxmanrao Kirloskar Road, Pune', state: 'Maharashtra', stateCode: '27', pincode: '411003', gstin: '27AAACK0011G1Z1' },
-    { name: 'Southern Rubber Products', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9443022334', address: 'Industrial Estate, Madurai', state: 'Tamil Nadu', stateCode: '33', pincode: '625018', gstin: '33AAACS2233H1Z3' },
-    { name: 'Bangalore Precision Hydraulics', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9845033445', address: 'Bommasandra Industrial Area, Bangalore', state: 'Karnataka', stateCode: '29', pincode: '560099', gstin: '29AAACB4455I1Z5' },
-    { name: 'Apex Motors & Components', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9886044556', address: 'Belgaum Industrial Zone, Belgaum', state: 'Karnataka', stateCode: '29', pincode: '590011', gstin: '29AAACA6677J1Z7' },
-    { name: 'National Steel & Sheet Works', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9844055667', address: 'Bhadravathi Steel Town', state: 'Karnataka', stateCode: '29', pincode: '577301', gstin: '29AAACN8899K1Z9' },
-    { name: 'Coimbatore Foundry & Castings', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9443066778', address: 'Ganapathy Industrial Post, Coimbatore', state: 'Tamil Nadu', stateCode: '33', pincode: '641006', gstin: '33AAACC1122L1Z2' },
-    { name: 'West Coast Agro Accessories', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9822077889', address: 'Thane Belapur Road, Navi Mumbai', state: 'Maharashtra', stateCode: '27', pincode: '400705', gstin: '27AAACW3344M1Z4' },
+    { name: 'Bharat Machinery & Motors', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9880099887', address: 'Gokul Road, Hubli', village: 'Hubli', taluk: 'Hubli', district: 'Dharwad', state: 'Karnataka', stateCode: '29', pincode: '580030', gstin: '29AAACB1122D1Z4', whatsappServiceReminders: false },
+    { name: 'Karnataka Agro Spares Ltd', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9844088111', address: 'Peenya Industrial Area, Bangalore', village: 'Bangalore', taluk: 'Bangalore North', district: 'Bangalore Urban', state: 'Karnataka', stateCode: '29', pincode: '560058', gstin: '29AAACK3344E1Z6', whatsappServiceReminders: false },
+    { name: 'Deccan Dairy Equipment Co', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9823077111', address: 'MIDC Area, Pune', village: 'Pune', taluk: 'Haveli', district: 'Pune', state: 'Maharashtra', stateCode: '27', pincode: '411026', gstin: '27AAACD7788F1Z8', whatsappServiceReminders: false },
+    { name: 'Kirloskar Oil Engines Ltd', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9822011223', address: 'Laxmanrao Kirloskar Road, Pune', village: 'Pune', taluk: 'Haveli', district: 'Pune', state: 'Maharashtra', stateCode: '27', pincode: '411003', gstin: '27AAACK0011G1Z1', whatsappServiceReminders: false },
+    { name: 'Southern Rubber Products', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9443022334', address: 'Industrial Estate, Madurai', village: 'Madurai', taluk: 'Madurai', district: 'Madurai', state: 'Tamil Nadu', stateCode: '33', pincode: '625018', gstin: '33AAACS2233H1Z3', whatsappServiceReminders: false },
+    { name: 'Bangalore Precision Hydraulics', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9845033445', address: 'Bommasandra Industrial Area, Bangalore', village: 'Bangalore', taluk: 'Anekal', district: 'Bangalore Urban', state: 'Karnataka', stateCode: '29', pincode: '560099', gstin: '29AAACB4455I1Z5', whatsappServiceReminders: false },
+    { name: 'Apex Motors & Components', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9886044556', address: 'Belgaum Industrial Zone, Belgaum', village: 'Belgaum', taluk: 'Belgaum', district: 'Belgaum', state: 'Karnataka', stateCode: '29', pincode: '590011', gstin: '29AAACA6677J1Z7', whatsappServiceReminders: false },
+    { name: 'National Steel & Sheet Works', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9844055667', address: 'Bhadravathi Steel Town', village: 'Bhadravathi', taluk: 'Bhadravathi', district: 'Shimoga', state: 'Karnataka', stateCode: '29', pincode: '577301', gstin: '29AAACN8899K1Z9', whatsappServiceReminders: false },
+    { name: 'Coimbatore Foundry & Castings', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9443066778', address: 'Ganapathy Industrial Post, Coimbatore', village: 'Coimbatore', taluk: 'Coimbatore', district: 'Coimbatore', state: 'Tamil Nadu', stateCode: '33', pincode: '641006', gstin: '33AAACC1122L1Z2', whatsappServiceReminders: false },
+    { name: 'West Coast Agro Accessories', type: 'SUPPLIER', customerType: 'BUSINESS', mobile: '9822077889', address: 'Thane Belapur Road, Navi Mumbai', village: 'Navi Mumbai', taluk: 'Thane', district: 'Thane', state: 'Maharashtra', stateCode: '27', pincode: '400705', gstin: '27AAACW3344M1Z4', whatsappServiceReminders: false },
   ];
 
   const dbParties: any[] = [];
@@ -349,11 +450,15 @@ export async function seedDatabase() {
           customerType: partyDef.customerType,
           mobile: partyDef.mobile,
           address: partyDef.address,
+          village: partyDef.village,
+          taluk: partyDef.taluk,
+          district: partyDef.district,
           shippingAddress: `${partyDef.address}, ${partyDef.state} - ${partyDef.pincode}`,
           state: partyDef.state,
           stateCode: partyDef.stateCode,
           pincode: partyDef.pincode,
           gstin: partyDef.gstin || null,
+          whatsappServiceReminders: partyDef.whatsappServiceReminders,
           openingBalance: 0,
         },
       });
@@ -361,18 +466,18 @@ export async function seedDatabase() {
     dbParties.push(party);
   }
 
-  // 7. Farmers / Contacts (10 Farmers linked under parent parties)
+  // 8. Farmers / Contacts (10 Farmers linked under parent parties)
   const farmersData = [
-    { parentMobile: '9620409800', name: 'Ramesh Agro Farm', mobile: '9844011223', address: 'Plot 4, Haveri Main Road, Haveri' },
-    { parentMobile: '9620409800', name: 'Mahesh Farm', mobile: '6366959062', address: 'Main Dairy Road, Tiptur' },
-    { parentMobile: '9620409800', name: 'Suma Dairy', mobile: '7676468179', address: 'Channarayapatna Road, Arasikere' },
-    { parentMobile: '9620409800', name: 'Ravi Farm', mobile: '9620409869', address: 'Gubbi Gate, Tumkur' },
-    { parentMobile: '9845011999', name: 'Anjanappa Farm', mobile: '9845011991', address: 'Bhadra Colony, Shimoga' },
-    { parentMobile: '9845011999', name: 'Basavaraj Agro', mobile: '9448022888', address: 'Tarikere Road, Shimoga' },
-    { parentMobile: '9741033777', name: 'Manjunath Farm', mobile: '9741033771', address: 'Dairy Circle, Hassan' },
-    { parentMobile: '9741033777', name: 'Shivakumar Dairy', mobile: '9611044666', address: 'Holenarasipura Road, Hassan' },
-    { parentMobile: '9535055555', name: 'Suresh Agro', mobile: '9535055551', address: 'Sugar Town, Mandya' },
-    { parentMobile: '9535055555', name: 'Chennappa Dairy', mobile: '9880066444', address: 'Koppa Circle, Maddur' },
+    { parentMobile: '9620409800', name: 'Mahesh Farm', mobile: '6366959062', address: 'Main Dairy Road, Tiptur', village: 'Tiptur', taluk: 'Tiptur', district: 'Tumkur', pincode: '572201' },
+    { parentMobile: '9844011223', name: 'Ramesh Farm', mobile: '9844011223', address: 'Plot 4, Haveri Main Road', village: 'Haveri', taluk: 'Haveri', district: 'Haveri', pincode: '581110' },
+    { parentMobile: '9620409800', name: 'Suma Dairy', mobile: '7676468179', address: 'Channarayapatna Road, Arasikere', village: 'Arasikere', taluk: 'Arasikere', district: 'Hassan', pincode: '573103' },
+    { parentMobile: '9620409800', name: 'Ravi Farm', mobile: '9620409869', address: 'Gubbi Gate, Tumkur', village: 'Tumkur', taluk: 'Tumkur', district: 'Tumkur', pincode: '572101' },
+    { parentMobile: '9845011999', name: 'Anjanappa Farm', mobile: '9845011991', address: 'Bhadra Colony, Shimoga', village: 'Shimoga', taluk: 'Shimoga', district: 'Shimoga', pincode: '577201' },
+    { parentMobile: '9845011999', name: 'Basavaraj Agro', mobile: '9448022888', address: 'Tarikere Road, Shimoga', village: 'Shimoga', taluk: 'Shimoga', district: 'Shimoga', pincode: '577201' },
+    { parentMobile: '9741033777', name: 'Manjunath Farm', mobile: '9741033771', address: 'Dairy Circle, Hassan', village: 'Hassan', taluk: 'Hassan', district: 'Hassan', pincode: '573201' },
+    { parentMobile: '9741033777', name: 'Shivakumar Dairy', mobile: '9611044666', address: 'Holenarasipura Road, Hassan', village: 'Hassan', taluk: 'Hassan', district: 'Hassan', pincode: '573201' },
+    { parentMobile: '9535055555', name: 'Suresh Agro', mobile: '9535055551', address: 'Sugar Town, Mandya', village: 'Mandya', taluk: 'Mandya', district: 'Mandya', pincode: '571401' },
+    { parentMobile: '9535055555', name: 'Chennappa Dairy', mobile: '9880066444', address: 'Koppa Circle, Maddur', village: 'Maddur', taluk: 'Maddur', district: 'Mandya', pincode: '571428' },
   ];
 
   const dbFarmers: any[] = [];
@@ -388,6 +493,10 @@ export async function seedDatabase() {
           name: farmerDef.name,
           mobile: farmerDef.mobile,
           address: farmerDef.address,
+          village: farmerDef.village,
+          taluk: farmerDef.taluk,
+          district: farmerDef.district,
+          pincode: farmerDef.pincode,
           shippingAddress: `${farmerDef.address}, Karnataka`,
           state: 'Karnataka',
           stateCode: '29',
@@ -397,17 +506,17 @@ export async function seedDatabase() {
     dbFarmers.push(farmer);
   }
 
-  // 8. Machines & Serial Numbers Assigned to Farmers (10 Machines)
+  // 9. Machines & Serial Numbers Assigned to Farmers (10 Machines)
   const machinesData = [
-    { serialNumber: 'MM-26-0001', itemSku: 'MM-400S', farmerMobile: '9844011223', model: 'Milking Machine Double Bucket' },
+    { serialNumber: 'MM-26-0001', itemSku: 'MM-400S', farmerMobile: '9844011223', model: 'Milking Machine Double Bucket 400S' },
     { serialNumber: 'CC-26-0002', itemSku: 'CC-01', farmerMobile: '9844011223', model: 'Heavy Duty Chaff Cutter 2HP' },
-    { serialNumber: 'MM-26-0003', itemSku: 'MM-400S', farmerMobile: '6366959062', model: 'Milking Machine Double Bucket' },
-    { serialNumber: 'SPR-26-0004', itemSku: 'SPR-16L', farmerMobile: '7676468179', model: 'Battery Sprayer 16L' },
+    { serialNumber: 'MM-26-0003', itemSku: 'MM-400S', farmerMobile: '6366959062', model: 'Milking Machine Double Bucket 400S' },
+    { serialNumber: 'SPR-26-0004', itemSku: 'SPR-16L', farmerMobile: '7676468179', model: 'Battery Sprayer 16L Heavy Duty' },
     { serialNumber: 'CC-26-0005', itemSku: 'CC-01', farmerMobile: '9620409869', model: 'Heavy Duty Chaff Cutter 2HP' },
-    { serialNumber: 'MM-26-0006', itemSku: 'MM-400S', farmerMobile: '9845011991', model: 'Milking Machine Double Bucket' },
+    { serialNumber: 'MM-26-0006', itemSku: 'MM-400S', farmerMobile: '9845011991', model: 'Milking Machine Double Bucket 400S' },
     { serialNumber: 'CC-26-0007', itemSku: 'CC-01', farmerMobile: '9448022888', model: 'Heavy Duty Chaff Cutter 2HP' },
-    { serialNumber: 'MOT-26-0008', itemSku: 'MOT-2HP', farmerMobile: '9741033771', model: 'Electric Motor 2HP' },
-    { serialNumber: 'MM-26-0009', itemSku: 'MM-400S', farmerMobile: '9611044666', model: 'Milking Machine Double Bucket' },
+    { serialNumber: 'MOT-26-0008', itemSku: 'MOT-2HP', farmerMobile: '9741033771', model: 'Electric Motor 2HP Single Phase' },
+    { serialNumber: 'MM-26-0009', itemSku: 'MM-400S', farmerMobile: '9611044666', model: 'Milking Machine Double Bucket 400S' },
     { serialNumber: 'CC-MINI-0010', itemSku: 'CC-MINI', farmerMobile: '9535055551', model: 'Mini Portable Chaff Cutter 1.5HP' },
   ];
 
@@ -431,49 +540,12 @@ export async function seedDatabase() {
           warrantyEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
           serviceIntervalDays: 90,
           nextServiceDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          assignedTechnicianId: techRavi.id,
+          assignedTechnicianId: techKumar.id,
           location: targetFarmer.address,
         },
       });
     }
     dbMachines.push(machine);
-  }
-
-  // 9. Service Tasks (10 Tasks - Due Today, Overdue, Upcoming, Completed)
-  const today = new Date();
-  const serviceTasksData = [
-    { serviceNo: 'SRV-26-27-0001', machineIndex: 0, dueDate: today, status: 'SCHEDULED', techId: techRavi.id, notes: 'Routine 90-day checkup due today' },
-    { serviceNo: 'SRV-26-27-0002', machineIndex: 1, dueDate: today, status: 'SCHEDULED', techId: techKumar.id, notes: 'Chaff cutter blade inspection due today' },
-    { serviceNo: 'SRV-26-27-0003', machineIndex: 2, dueDate: new Date(today.getTime() - 5 * 86400000), status: 'SCHEDULED', techId: techRavi.id, notes: 'Overdue service checkup' },
-    { serviceNo: 'SRV-26-27-0004', machineIndex: 3, dueDate: new Date(today.getTime() - 10 * 86400000), status: 'SCHEDULED', techId: techKumar.id, notes: 'Sprayer pump pressure check overdue' },
-    { serviceNo: 'SRV-26-27-0005', machineIndex: 4, dueDate: new Date(today.getTime() + 14 * 86400000), status: 'SCHEDULED', techId: techRavi.id, notes: 'Upcoming quarterly maintenance' },
-    { serviceNo: 'SRV-26-27-0006', machineIndex: 5, dueDate: new Date(today.getTime() + 30 * 86400000), status: 'SCHEDULED', techId: techKumar.id, notes: 'Upcoming milking liner check' },
-    { serviceNo: 'SRV-26-27-0007', machineIndex: 6, dueDate: new Date(today.getTime() + 45 * 86400000), status: 'SCHEDULED', techId: techRavi.id, notes: 'Upcoming belt tension check' },
-    { serviceNo: 'SRV-26-27-0008', machineIndex: 7, dueDate: new Date(today.getTime() + 60 * 86400000), status: 'SCHEDULED', techId: techKumar.id, notes: 'Upcoming motor winding check' },
-    { serviceNo: 'SRV-26-27-0009', machineIndex: 8, dueDate: new Date(today.getTime() - 15 * 86400000), status: 'COMPLETED', techId: techRavi.id, notes: 'Service completed cleanly' },
-    { serviceNo: 'SRV-26-27-0010', machineIndex: 9, dueDate: new Date(today.getTime() - 20 * 86400000), status: 'COMPLETED', techId: techKumar.id, notes: 'First service done' },
-  ];
-
-  for (const sDef of serviceTasksData) {
-    const machine = dbMachines[sDef.machineIndex];
-    if (!machine) continue;
-
-    let sTask = await prisma.serviceTask.findUnique({ where: { serviceNo: sDef.serviceNo } });
-    if (!sTask) {
-      await prisma.serviceTask.create({
-        data: {
-          serviceNo: sDef.serviceNo,
-          machineId: machine.id,
-          partyId: machine.partyId,
-          farmerId: machine.farmerId,
-          serialNumber: machine.serialNumber,
-          serviceDueDate: sDef.dueDate,
-          assignedTechnicianId: sDef.techId,
-          status: sDef.status,
-          technicianNotes: sDef.notes,
-        },
-      });
-    }
   }
 
   // 10. Sales Invoices (10 Invoices)
@@ -490,7 +562,6 @@ export async function seedDatabase() {
     { no: 'SAM-26-27-0010', partyIndex: 1, farmerIndex: 5, itemIndex: 9, qty: 1, rate: 28000, gstRate: 12, isInter: false, paid: 15000, status: 'PARTIALLY_PAID', mode: 'CASH' },
   ];
 
-  const dbInvoices: any[] = [];
   for (let idx = 0; idx < invoicesData.length; idx++) {
     const invDef = invoicesData[idx];
     const party = dbParties[invDef.partyIndex];
@@ -552,7 +623,6 @@ export async function seedDatabase() {
         },
       });
 
-      // Explicit Payment records for paid/partial invoices (10 Payments)
       if (invDef.paid > 0) {
         const payReceiptNo = `PAY-INV-${invDef.no.substring(10)}`;
         const existingPay = await prisma.payment.findUnique({ where: { receiptNo: payReceiptNo } });
@@ -573,7 +643,6 @@ export async function seedDatabase() {
         }
       }
     }
-    dbInvoices.push(existingInv);
   }
 
   // 11. Quotations (10 Quotations)
@@ -810,6 +879,9 @@ export async function seedDatabase() {
     }
   }
 
-  await syncSampleDates();
-  console.log('Seeding Smart Agro Machinerys database completed successfully!');
+  await syncSequenceCounters(prisma);
+  await seedDefaultBillTemplates(prisma);
+  await ensureRelativeServiceReminders(prisma);
+
+  console.log('Seeding Smart Agro Machinerys persistent database completed cleanly!');
 }

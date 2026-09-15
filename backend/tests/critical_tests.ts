@@ -1,4 +1,5 @@
 import { prisma } from '../src/db';
+import { seedDatabase } from '../src/seed';
 import { calculateGST, isInterStateTransaction } from '../src/utils/gst';
 import { generateDocumentNumber } from '../src/utils/numbering';
 
@@ -23,17 +24,14 @@ async function runCriticalTests() {
       throw new Error('Test setup failed: Required seed data missing!');
     }
 
-    // Clean up test records
-    await prisma.machine.updateMany({ data: { invoiceId: null } });
-    await prisma.deliveryChallan.updateMany({ data: { invoiceId: null } });
-    await prisma.deliveryChallanItem.deleteMany();
-    await prisma.deliveryChallan.deleteMany();
-    await prisma.purchaseItem.deleteMany();
-    await prisma.purchaseInvoice.deleteMany();
-    await prisma.invoiceItem.deleteMany();
-    await prisma.invoice.deleteMany();
-    await prisma.quotationItem.deleteMany();
-    await prisma.quotation.deleteMany();
+    // Clean up test specific records (only test generated numbers)
+    const testDocNumbers = ['PUR-26-27-0001', 'PUR-26-27-0002', 'DC-26-27-0001', 'SAM-26-27-0001'];
+    await prisma.deliveryChallanItem.deleteMany({ where: { deliveryChallan: { challanNumber: { in: testDocNumbers } } } });
+    await prisma.deliveryChallan.deleteMany({ where: { challanNumber: { in: testDocNumbers } } });
+    await prisma.purchaseItem.deleteMany({ where: { purchaseInvoice: { purchaseNumber: { in: testDocNumbers } } } });
+    await prisma.purchaseInvoice.deleteMany({ where: { purchaseNumber: { in: testDocNumbers } } });
+    await prisma.invoiceItem.deleteMany({ where: { invoice: { invoiceNumber: { in: testDocNumbers } } } });
+    await prisma.invoice.deleteMany({ where: { invoiceNumber: { in: testDocNumbers } } });
 
     // Reset configs
     await prisma.documentNumberConfig.upsert({
@@ -237,6 +235,7 @@ async function runCriticalTests() {
 
     console.log('✅ TEST 4 PASSED: Party reference check & deactivation logic verified!\n');
 
+    await seedDatabase();
     console.log('====================================================');
     console.log('ALL CRITICAL INTEGRATION TESTS PASSED PERFECTLY!');
     console.log('====================================================\n');

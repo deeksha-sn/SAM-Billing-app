@@ -708,6 +708,37 @@ export const Settings: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Manual Reset Demo Data Option */}
+          <div className="bg-white rounded-2xl border border-red-200 p-6 shadow-sm space-y-4">
+            <h2 className="text-lg font-bold text-red-900 flex items-center gap-2 border-b border-red-100 pb-3">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              <span>Reset Demo Data (Explicit Manual Action Only)</span>
+            </h2>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-red-50 rounded-xl border border-red-200 text-xs gap-3">
+              <div>
+                <p className="font-bold text-red-950">Explicitly Re-seed Sample Dataset?</p>
+                <p className="text-red-700">This action runs only when clicked. It will never run automatically on startup or dev mode.</p>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (window.confirm("Are you sure you want to explicitly reset and re-seed sample demo data? Your custom database records will be refreshed.")) {
+                    try {
+                      await apiRequest('/backup/reset-demo-data', { method: 'POST' });
+                      alert("Demo dataset refreshed and re-seeded cleanly!");
+                      window.location.reload();
+                    } catch (err: any) {
+                      alert(`Error: ${err.message}`);
+                    }
+                  }
+                }}
+                className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl font-black shadow-sm transition whitespace-nowrap"
+              >
+                Reset Demo Data
+              </button>
+            </div>
+          </div>
         </>
       )}
 

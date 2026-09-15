@@ -35,3 +35,10 @@ yarn-error.log*
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# Scratch and temporary directories
+scratch/
+**/scratch/
+sketch_aug13a/
+ver2/
+

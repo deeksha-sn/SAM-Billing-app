@@ -12,12 +12,19 @@ import {
   ArrowUpRight,
   Calendar,
   Filter,
+  Bell,
+  Phone,
+  MessageSquare,
+  MapPin,
+  Clock,
+  UserCheck,
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
+  const [reminderData, setReminderData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Date Filter State
@@ -37,9 +44,32 @@ export const Dashboard: React.FC = () => {
       .finally(() => setLoading(false));
   };
 
+  const fetchReminderSummary = () => {
+    apiRequest('/services/reminders/summary')
+      .then((res) => setReminderData(res))
+      .catch((err) => console.error('Failed to fetch reminder summary on dashboard:', err));
+  };
+
   useEffect(() => {
     fetchDashboardData(period, startDate, endDate);
+    fetchReminderSummary();
   }, [period]);
+
+  const getWhatsAppUrl = (item: any) => {
+    const phone = (item.phone || item.party?.mobile || item.farmer?.mobile || '').replace(/\D/g, '');
+    if (!phone) return '#';
+    const formattedPhone = phone.length === 10 ? '91' + phone : phone;
+
+    const name = item.farmerName || item.customerName || item.party?.name || 'Customer';
+    const machineName = item.machine?.model || item.machineName || 'Equipment';
+    const dueDate = item.formattedDueDate || (item.serviceDueDate ? new Date(item.serviceDueDate).toLocaleDateString('en-IN') : 'Today');
+    const pincode = item.pincode || item.farmer?.pincode || item.party?.pincode || 'N/A';
+    const address = item.fullAddress || 'Karnataka';
+
+    const msg = `Hello ${name},\n\nThis is a service reminder from Smart Agro Machinerys.\n\nMachine: ${machineName} (Serial No: ${item.serialNumber || 'N/A'})\nScheduled Date: ${dueDate}\nLocation: ${address} (PIN: ${pincode})\n\nPlease contact us to confirm your service appointment.\n\nThank you,\nSmart Agro Machinerys`;
+
+    return `https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`;
+  };
 
   const handleApplyCustomFilter = (e: React.FormEvent) => {
     e.preventDefault();
@@ -339,6 +369,129 @@ export const Dashboard: React.FC = () => {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* TODAY'S REMINDERS DASHBOARD SECTION */}
+          <div className="bg-white p-6 rounded-2xl border border-amber-200 shadow-md space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-amber-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-extrabold shadow-sm">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
+                    <span>TODAY'S REMINDERS</span>
+                    <span className="text-xs bg-amber-100 text-amber-900 border border-amber-300 font-extrabold px-2.5 py-0.5 rounded-full font-mono">
+                      LIVE DATABASE ENGINE
+                    </span>
+                  </h2>
+                  <p className="text-xs text-gray-500 font-medium">Stage Breakdown: 20-Day, 10-Day, 7-Day, 3-Day, Today & Overdue Reminders</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => navigate('/services')}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-sm transition flex items-center gap-1.5"
+              >
+                <span>Open Full Reminders Dashboard</span>
+                <ArrowUpRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* LIVE REMINDER COUNTS BAR */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-center font-mono">
+              <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                <div className="text-[10px] font-extrabold uppercase text-purple-900 font-sans">20 Days</div>
+                <div className="text-xl font-black text-purple-900 mt-0.5">{reminderData?.counts?.days20 || 0}</div>
+              </div>
+              <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+                <div className="text-[10px] font-extrabold uppercase text-indigo-900 font-sans">10 Days</div>
+                <div className="text-xl font-black text-indigo-900 mt-0.5">{reminderData?.counts?.days10 || 0}</div>
+              </div>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                <div className="text-[10px] font-extrabold uppercase text-blue-900 font-sans">7 Days</div>
+                <div className="text-xl font-black text-blue-900 mt-0.5">{reminderData?.counts?.days7 || 0}</div>
+              </div>
+              <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl">
+                <div className="text-[10px] font-extrabold uppercase text-sky-900 font-sans">3 Days</div>
+                <div className="text-xl font-black text-sky-900 mt-0.5">{reminderData?.counts?.days3 || 0}</div>
+              </div>
+              <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl">
+                <div className="text-[10px] font-extrabold uppercase text-emerald-900 font-sans">Today</div>
+                <div className="text-xl font-black text-emerald-900 mt-0.5">{reminderData?.counts?.today || 0}</div>
+              </div>
+              <div className="p-3 bg-red-50 border border-red-300 rounded-xl">
+                <div className="text-[10px] font-extrabold uppercase text-red-900 font-sans">Overdue</div>
+                <div className="text-xl font-black text-red-700 mt-0.5">{reminderData?.counts?.overdue || 0}</div>
+              </div>
+            </div>
+
+            {/* LIVE SAMPLE REMINDERS LIST */}
+            <div className="space-y-3 pt-2">
+              {(() => {
+                const sampleItems: any[] = [
+                  ...(reminderData?.stages?.todayReminders || []).map((i: any) => ({ ...i, stageBadge: 'TODAY', stageColor: 'bg-emerald-100 text-emerald-900 border-emerald-300' })),
+                  ...(reminderData?.stages?.days3 || []).map((i: any) => ({ ...i, stageBadge: '3 DAYS BEFORE', stageColor: 'bg-sky-100 text-sky-900 border-sky-300' })),
+                  ...(reminderData?.stages?.days7 || []).map((i: any) => ({ ...i, stageBadge: '7 DAYS BEFORE', stageColor: 'bg-blue-100 text-blue-900 border-blue-300' })),
+                  ...(reminderData?.stages?.days10 || []).map((i: any) => ({ ...i, stageBadge: '10 DAYS BEFORE', stageColor: 'bg-indigo-100 text-indigo-900 border-indigo-300' })),
+                  ...(reminderData?.stages?.days20 || []).map((i: any) => ({ ...i, stageBadge: '20 DAYS BEFORE', stageColor: 'bg-purple-100 text-purple-900 border-purple-300' })),
+                  ...(reminderData?.stages?.overdueReminders || []).map((i: any) => ({ ...i, stageBadge: 'OVERDUE DAILY', stageColor: 'bg-red-100 text-red-900 border-red-300' })),
+                ];
+
+                if (sampleItems.length === 0) {
+                  return <div className="text-xs text-gray-500 font-medium text-center py-4">No active reminders currently scheduled.</div>;
+                }
+
+                return sampleItems.slice(0, 5).map((item, idx) => (
+                  <div key={item.id || idx} className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 text-xs">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 text-[10px] font-black rounded-md border ${item.stageColor}`}>
+                          {item.stageBadge}
+                        </span>
+                        <span className="font-black text-gray-900 text-sm">
+                          👨‍🌾 {item.farmerName || item.customerName}
+                        </span>
+                        <span className="font-mono text-gray-500 text-[11px]">
+                          ({item.phone})
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 text-gray-600 text-[11px]">
+                        <span>📍 {item.fullAddress}</span>
+                        <span className="font-mono font-bold text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                          PIN: {item.pincode || 'N/A'}
+                        </span>
+                        <span>🚜 Machine: <strong className="text-gray-900">{item.machine?.model || item.machineName || 'Equipment'}</strong> ({item.serialNumber})</span>
+                        <span>👨‍🔧 Tech: <strong className="text-gray-900">{item.assignedTechnician?.name || item.technician || 'Unassigned'}</strong></span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                      <a
+                        href={getWhatsAppUrl(item)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg flex items-center gap-1 shadow-sm transition text-[11px]"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
+                      </a>
+                      <a
+                        href={`tel:${item.phone}`}
+                        className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg flex items-center gap-1 transition text-[11px]"
+                      >
+                        <Phone className="w-3.5 h-3.5 text-gray-600" /> Call
+                      </a>
+                      <button
+                        onClick={() => navigate('/services')}
+                        className="px-3 py-1.5 bg-blue-900 hover:bg-blue-950 text-white font-bold rounded-lg flex items-center gap-1 shadow-sm transition text-[11px]"
+                      >
+                        <UserCheck className="w-3.5 h-3.5" /> Assign
+                      </button>
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
 

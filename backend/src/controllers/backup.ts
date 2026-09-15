@@ -172,11 +172,14 @@ export async function resetDemoData(req: AuthRequest, res: Response) {
         userId: req.user?.id,
         action: 'RESET_DEMO_DATA',
         entityType: 'SYSTEM',
-        reference: 'Deleted all demo transactions and master records',
+        reference: 'Explicitly reset and re-seeded demo data',
       },
     });
 
-    return res.json({ message: 'All demo transactions, parties, items, and BOM records deleted successfully' });
+    const { seedDatabase } = require('../seed');
+    await seedDatabase();
+
+    return res.json({ message: 'Demo data reset and fresh sample dataset re-seeded successfully!' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
