@@ -8,16 +8,22 @@ generator client {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  name         String
-  username     String   @unique
-  email        String?  @unique
-  mobile       String?
-  passwordHash String
-  role         String   @default("OFFICE") // ADMIN, OFFICE, SERVICE_MANAGER, SERVICE_TECHNICIAN
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String   @id @default(uuid())
+  name                String
+  username            String   @unique
+  email               String?  @unique
+  mobile              String?
+  passwordHash        String
+  role                String   @default("OFFICE") // ADMIN, OFFICE, SERVICE_MANAGER, SERVICE_TECHNICIAN
+  address             String?
+  state               String?  @default("Karnataka")
+  district            String?
+  taluk               String?
+  pincode             String?
+  serviceAreaPincodes String?  // Comma-separated PIN codes e.g. "572101, 572102, 572103"
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   invoices         Invoice[]
   expenses         Expense[]
@@ -641,15 +647,17 @@ model ServiceReminderLog {
   partyId            String
   farmerId           String?
   machineId          String?
+  reminderStage      String?   // 20_DAYS_BEFORE, 10_DAYS_BEFORE, 7_DAYS_BEFORE, 3_DAYS_BEFORE, SERVICE_DAY, OVERDUE_DAILY
   reminderType       String    // SERVICE_DUE_TODAY, SERVICE_UPCOMING, SERVICE_OVERDUE, PAYMENT_DUE, PAYMENT_OVERDUE
   recipientPhone     String
   recipientName      String
   scheduledDate      DateTime
   sentAt             DateTime?
-  status             String    @default("PENDING") // PENDING, SENT, DELIVERED, READ, FAILED, OPTED_OUT
+  status             String    @default("PENDING") // PENDING, SENT, DELIVERED, READ, FAILED, OPTED_OUT, MANUAL_GENERATED
   templateName       String?
   whatsappMessageId  String?
   messageText        String
+  reminderDetails    String?   // JSON string storing full reminder metadata snapshot
   failureReason      String?
   isAutomatic        Boolean   @default(false)
   createdAt          DateTime  @default(now())

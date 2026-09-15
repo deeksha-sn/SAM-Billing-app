@@ -29,32 +29,36 @@ export function addIntervalToDate(startDate: Date | string, value: number, unit:
   const currentDay = d.getDate();
   d.setMonth(d.getMonth() + v);
 
-  // If day overflowed (e.g. Aug 31 -> Nov 31 becomes Dec 1), clamp to last day of target month
   if (d.getDate() !== currentDay) {
-    d.setDate(0); // Sets to last day of previous month
+    d.setDate(0); // Clamp to last day of month
   }
 
   return d;
 }
 
-export async function processDailyServiceReminders(): Promise<{ processed: number; sent: number; errors: number }> {
+export async function processDailyServiceReminders(): Promise<{ processed: number; sent: number; errors: number; skipped: number }> {
   let processed = 0;
   let sent = 0;
   let errors = 0;
+  let skipped = 0;
 
   try {
     const config = await getWhatsAppSettings();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Fetch active service tasks due today or overdue or upcoming within window
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+
+    // Fetch active service tasks requiring service reminders (exclude COMPLETED & CANCELLED)
     const tasks = await prisma.serviceTask.findMany({
       where: {
-        status: { in: ['SCHEDULED', 'ASSIGNED', 'CONFIRMED'] },
+        status: { notIn: ['COMPLETED', 'CANCELLED'] },
       },
       include: {
         party: true,
-        machine: true,
+        farmer: true,
+        machine: { include: { machineItem: true } },
         assignedTechnician: true,
       },
     });
@@ -62,57 +66,126 @@ export async function processDailyServiceReminders(): Promise<{ processed: numbe
     for (const task of tasks) {
       processed++;
       const party = task.party;
+      if (party && party.whatsappServiceReminders === false) {
+        skipped++;
+        continue;
+      }
+      const farmer = task.farmer;
+      const recipientPhone = farmer?.mobile || party.mobile;
+      const recipientName = farmer ? `${farmer.name} (${party.name})` : party.name;
+      const fullAddress = farmer
+        ? [farmer.address, farmer.village, farmer.taluk, farmer.district, farmer.state].filter(Boolean).join(', ')
+        : [party.address, party.village, party.taluk, party.district, party.state].filter(Boolean).join(', ');
+      const pincode = farmer?.pincode || party.pincode || 'N/A';
+      const machineName = task.machine?.model || task.machine?.machineItem?.name || 'Agro Equipment';
+      const technicianName = task.assignedTechnician?.name || 'Unassigned';
+
       const dueDate = new Date(task.serviceDueDate);
       dueDate.setHours(0, 0, 0, 0);
 
+      // Difference in days between due date and today
       const diffDays = Math.round((dueDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
 
-      let reminderType: string | null = null;
-      if (diffDays === 0) {
-        reminderType = 'SERVICE_DUE_TODAY';
-      } else if (diffDays > 0 && config.upcomingDays.split(',').map(Number).includes(diffDays)) {
-        reminderType = `SERVICE_UPCOMING_${diffDays}D`;
-      } else if (diffDays < 0 && config.overdueDays.split(',').map(Number).includes(Math.abs(diffDays))) {
-        reminderType = `SERVICE_OVERDUE_${Math.abs(diffDays)}D`;
+      let stageKey: string | null = null;
+      let stageLabel: string | null = null;
+
+      if (diffDays === 20) {
+        stageKey = '20_DAYS_BEFORE';
+        stageLabel = '20 DAYS BEFORE SERVICE';
+      } else if (diffDays === 10) {
+        stageKey = '10_DAYS_BEFORE';
+        stageLabel = '10 DAYS BEFORE SERVICE';
+      } else if (diffDays === 7) {
+        stageKey = '7_DAYS_BEFORE';
+        stageLabel = '7 DAYS BEFORE SERVICE';
+      } else if (diffDays === 3) {
+        stageKey = '3_DAYS_BEFORE';
+        stageLabel = '3 DAYS BEFORE SERVICE';
+      } else if (diffDays === 0) {
+        stageKey = 'SERVICE_DAY';
+        stageLabel = 'SERVICE DAY REMINDER';
+      } else if (diffDays < 0) {
+        stageKey = 'OVERDUE_DAILY';
+        stageLabel = `OVERDUE DAILY REMINDER (${Math.abs(diffDays)} DAYS OVERDUE)`;
       }
 
-      if (!reminderType) continue;
+      if (!stageKey) {
+        skipped++;
+        continue;
+      }
 
-      // Check customer opt-in
+      // Snapshot details required by specification
+      const reminderSnapshot = {
+        customerName: party.name,
+        farmerName: farmer?.name || party.name,
+        phone: recipientPhone,
+        fullAddress: fullAddress,
+        pincode: pincode,
+        machineName: machineName,
+        serialNumber: task.serialNumber,
+        serviceDate: dueDate.toISOString().split('T')[0],
+        technician: technicianName,
+        reminderStage: stageKey,
+        stageLabel: stageLabel,
+      };
+
+      // Idempotency check: Do not send duplicate reminders for the same service and same stage
+      if (stageKey === 'OVERDUE_DAILY') {
+        const existingLogToday = await prisma.serviceReminderLog.findFirst({
+          where: {
+            serviceTaskId: task.id,
+            reminderStage: 'OVERDUE_DAILY',
+            createdAt: { gte: today, lte: todayEnd },
+          },
+        });
+        if (existingLogToday) {
+          skipped++;
+          continue;
+        }
+      } else {
+        const existingLogStage = await prisma.serviceReminderLog.findFirst({
+          where: {
+            serviceTaskId: task.id,
+            reminderStage: stageKey,
+            scheduledDate: task.serviceDueDate,
+          },
+        });
+        if (existingLogStage) {
+          skipped++;
+          continue;
+        }
+      }
+
+      // Check Customer Opt-in
       if (!party.whatsappServiceReminders) {
         await prisma.serviceReminderLog.create({
           data: {
             serviceTaskId: task.id,
             partyId: party.id,
+            farmerId: farmer?.id || null,
             machineId: task.machineId,
-            reminderType: reminderType,
-            recipientPhone: party.mobile,
-            recipientName: party.name,
+            reminderStage: stageKey,
+            reminderType: `SERVICE_${stageKey}`,
+            recipientPhone: recipientPhone,
+            recipientName: recipientName,
             scheduledDate: task.serviceDueDate,
             status: 'OPTED_OUT',
             messageText: 'Customer has opted out of WhatsApp service reminders.',
+            reminderDetails: JSON.stringify(reminderSnapshot),
             isAutomatic: true,
           },
         });
+        skipped++;
         continue;
       }
 
-      // Check if reminder was already sent today for this task and reminderType
-      const existingLog = await prisma.serviceReminderLog.findFirst({
-        where: {
-          serviceTaskId: task.id,
-          reminderType: reminderType,
-          createdAt: {
-            gte: today,
-          },
-        },
-      });
-
-      if (existingLog) continue; // Duplicate prevention
-
-      const messageText = `Dear ${party.name},\n\nThis is a service reminder from Smart Agro Machinerys.\n\nMachine: ${task.machine?.model || 'Equipment'}\nSerial No: ${task.serialNumber}\nService Due Date: ${dueDate.toLocaleDateString('en-IN')}\n\n${
-        diffDays === 0 ? 'Your machine service is due TODAY.' : diffDays < 0 ? 'Your machine service is OVERDUE.' : `Your machine service is due in ${diffDays} day(s).`
-      }\n\nPlease contact us to schedule your service.\n\nSmart Agro Machinerys\nPhone: ${config.businessPhone}\nThank you!`;
+      const messageText = `Dear ${recipientName},\n\n*SERVICE REMINDER - SMART AGRO MACHINERYS*\nStatus: ${stageLabel}\n\n🚜 Machine: ${machineName}\n🔢 Serial No: ${task.serialNumber}\n📍 Service Location: ${fullAddress} (PIN: ${pincode})\n📅 Scheduled Service Date: ${dueDate.toLocaleDateString('en-IN')}\n👨‍🔧 Assigned Technician: ${technicianName}\n\n${
+        diffDays === 0
+          ? 'Your machine service is scheduled for TODAY.'
+          : diffDays < 0
+          ? `Your machine service is OVERDUE by ${Math.abs(diffDays)} day(s).`
+          : `Your machine service is due in ${diffDays} day(s).`
+      }\n\nPlease reach out to us if you need to reschedule.\nPhone: ${config.businessPhone || '+91 98765 43210'}\nThank you!`;
 
       let status = 'PENDING';
       let sentAt: Date | null = null;
@@ -121,7 +194,7 @@ export async function processDailyServiceReminders(): Promise<{ processed: numbe
 
       if (config.autoRemindersEnabled && config.enabled) {
         const sendRes = await sendWhatsAppCloudMessage({
-          to: party.mobile,
+          to: recipientPhone,
           text: messageText,
           isAutomatic: true,
         });
@@ -136,21 +209,29 @@ export async function processDailyServiceReminders(): Promise<{ processed: numbe
           failureReason = sendRes.error;
           errors++;
         }
+      } else {
+        // Manual mode record
+        status = 'MANUAL_GENERATED';
+        sentAt = new Date();
+        sent++;
       }
 
       await prisma.serviceReminderLog.create({
         data: {
           serviceTaskId: task.id,
           partyId: party.id,
+          farmerId: farmer?.id || null,
           machineId: task.machineId,
-          reminderType: reminderType,
-          recipientPhone: party.mobile,
-          recipientName: party.name,
+          reminderStage: stageKey,
+          reminderType: `SERVICE_${stageKey}`,
+          recipientPhone: recipientPhone,
+          recipientName: recipientName,
           scheduledDate: task.serviceDueDate,
           sentAt: sentAt,
           status: status,
           whatsappMessageId: whatsappMessageId,
           messageText: messageText,
+          reminderDetails: JSON.stringify(reminderSnapshot),
           failureReason: failureReason,
           isAutomatic: true,
         },
@@ -160,5 +241,5 @@ export async function processDailyServiceReminders(): Promise<{ processed: numbe
     console.error('Daily Service Reminder Scheduler Error:', err);
   }
 
-  return { processed, sent, errors };
+  return { processed, sent, errors, skipped };
 }

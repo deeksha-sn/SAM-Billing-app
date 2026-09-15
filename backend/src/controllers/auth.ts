@@ -73,7 +73,22 @@ export async function getCurrentUser(req: AuthRequest, res: Response) {
 export async function getUsers(req: AuthRequest, res: Response) {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, name: true, username: true, email: true, role: true, active: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        email: true,
+        mobile: true,
+        role: true,
+        address: true,
+        state: true,
+        district: true,
+        taluk: true,
+        pincode: true,
+        serviceAreaPincodes: true,
+        active: true,
+        createdAt: true,
+      },
       orderBy: { name: 'asc' },
     });
     return res.json({ users });
@@ -84,7 +99,21 @@ export async function getUsers(req: AuthRequest, res: Response) {
 
 export async function createUser(req: AuthRequest, res: Response) {
   try {
-    const { name, username, email, password, role } = req.body;
+    const {
+      name,
+      username,
+      email,
+      mobile,
+      password,
+      role,
+      address,
+      state,
+      district,
+      taluk,
+      pincode,
+      serviceAreaPincodes,
+    } = req.body;
+
     if (!name || !username || !password || !role) {
       return res.status(400).json({ error: 'Name, username, password, and role are required' });
     }
@@ -96,8 +125,36 @@ export async function createUser(req: AuthRequest, res: Response) {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { name, username, email, passwordHash, role, active: true },
-      select: { id: true, name: true, username: true, email: true, role: true, active: true },
+      data: {
+        name,
+        username,
+        email,
+        mobile,
+        passwordHash,
+        role,
+        address,
+        state: state || 'Karnataka',
+        district,
+        taluk,
+        pincode,
+        serviceAreaPincodes,
+        active: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        email: true,
+        mobile: true,
+        role: true,
+        address: true,
+        state: true,
+        district: true,
+        taluk: true,
+        pincode: true,
+        serviceAreaPincodes: true,
+        active: true,
+      },
     });
 
     return res.status(201).json({ user });
@@ -109,12 +166,32 @@ export async function createUser(req: AuthRequest, res: Response) {
 export async function updateUser(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
-    const { name, email, password, role, active } = req.body;
+    const {
+      name,
+      email,
+      mobile,
+      password,
+      role,
+      address,
+      state,
+      district,
+      taluk,
+      pincode,
+      serviceAreaPincodes,
+      active,
+    } = req.body;
 
     const data: any = {};
     if (name !== undefined) data.name = name;
     if (email !== undefined) data.email = email;
+    if (mobile !== undefined) data.mobile = mobile;
     if (role !== undefined) data.role = role;
+    if (address !== undefined) data.address = address;
+    if (state !== undefined) data.state = state;
+    if (district !== undefined) data.district = district;
+    if (taluk !== undefined) data.taluk = taluk;
+    if (pincode !== undefined) data.pincode = pincode;
+    if (serviceAreaPincodes !== undefined) data.serviceAreaPincodes = serviceAreaPincodes;
     if (active !== undefined) data.active = active;
     if (password) {
       data.passwordHash = await bcrypt.hash(password, 10);
@@ -123,7 +200,21 @@ export async function updateUser(req: AuthRequest, res: Response) {
     const user = await prisma.user.update({
       where: { id },
       data,
-      select: { id: true, name: true, username: true, email: true, role: true, active: true },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        email: true,
+        mobile: true,
+        role: true,
+        address: true,
+        state: true,
+        district: true,
+        taluk: true,
+        pincode: true,
+        serviceAreaPincodes: true,
+        active: true,
+      },
     });
 
     return res.json({ user });

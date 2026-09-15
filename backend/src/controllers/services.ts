@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../db';
 import { AuthRequest } from '../middleware/auth';
 import { generateDocumentNumber } from '../utils/numbering';
-import { addIntervalToDate } from '../services/reminderScheduler';
+import { addIntervalToDate, processDailyServiceReminders } from '../services/reminderScheduler';
 import { getWhatsAppSettings, sendWhatsAppCloudMessage } from '../services/whatsappService';
 
 export async function getServices(req: AuthRequest, res: Response) {
@@ -45,6 +45,11 @@ export async function getServices(req: AuthRequest, res: Response) {
     } else if (filter === 'assigned') {
       where.assignedTechnicianId = { not: null };
       where.status = { notIn: ['COMPLETED', 'CANCELLED'] };
+    } else if (filter === 'reminder_due') {
+      where.status = { notIn: ['COMPLETED', 'CANCELLED'] };
+    } else if (filter === 'nearby_services') {
+      where.status = { notIn: ['COMPLETED', 'CANCELLED'] };
+      where.serviceDueDate = { gte: today, lt: nextWeek };
     }
 
     // Specific Date filter (e.g. from Service Calendar click)
@@ -77,7 +82,7 @@ export async function getServices(req: AuthRequest, res: Response) {
       ];
     }
 
-    const services = await prisma.serviceTask.findMany({
+    let services = await prisma.serviceTask.findMany({
       where,
       include: {
         party: true,
@@ -92,6 +97,15 @@ export async function getServices(req: AuthRequest, res: Response) {
       },
       orderBy: { serviceDueDate: 'asc' },
     });
+
+    if (filter === 'reminder_due') {
+      services = services.filter((s) => {
+        const dueDate = new Date(s.serviceDueDate);
+        dueDate.setHours(0, 0, 0, 0);
+        const diffDays = Math.round((dueDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
+        return diffDays <= 0 || [20, 10, 7, 3].includes(diffDays);
+      });
+    }
 
     return res.json({ services });
   } catch (err: any) {
@@ -191,6 +205,7 @@ export async function createServiceTask(req: AuthRequest, res: Response) {
           serviceNo: docNumber,
           machineId: machine.id,
           partyId: machine.partyId,
+          farmerId: machine.farmerId || null,
           serialNumber: machine.serialNumber,
           serviceDueDate: new Date(serviceDueDate),
           serviceIntervalDays: machine.serviceIntervalDays,
@@ -199,7 +214,7 @@ export async function createServiceTask(req: AuthRequest, res: Response) {
           status: assignedTechnicianId ? 'ASSIGNED' : 'SCHEDULED',
           technicianNotes: notes,
         },
-        include: { party: true, machine: true, assignedTechnician: true },
+        include: { party: true, farmer: true, machine: true, assignedTechnician: true },
       });
 
       return task;
@@ -236,6 +251,323 @@ export async function assignTechnician(req: AuthRequest, res: Response) {
   }
 }
 
+export async function getRecommendedTechnicians(req: AuthRequest, res: Response) {
+  try {
+    const { serviceId, pincode, taluk, district, date } = req.query;
+
+    let targetPincode = String(pincode || '').trim();
+    let targetTaluk = String(taluk || '').trim();
+    let targetDistrict = String(district || '').trim();
+    let targetDate = date ? new Date(String(date)) : new Date();
+
+    if (serviceId) {
+      const task = await prisma.serviceTask.findUnique({
+        where: { id: String(serviceId) },
+        include: { party: true, farmer: true },
+      });
+      if (task) {
+        targetPincode = task.farmer?.pincode || task.party.pincode || targetPincode;
+        targetTaluk = task.farmer?.taluk || task.party.taluk || targetTaluk;
+        targetDistrict = task.farmer?.district || task.party.district || targetDistrict;
+        targetDate = new Date(task.serviceDueDate);
+      }
+    }
+
+    targetDate.setHours(0, 0, 0, 0);
+    const dateEnd = new Date(targetDate);
+    dateEnd.setDate(dateEnd.getDate() + 1);
+
+    // Fetch active technicians
+    const technicians = await prisma.user.findMany({
+      where: {
+        role: { in: ['SERVICE_TECHNICIAN', 'SERVICE_MANAGER', 'ADMIN'] },
+        active: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        mobile: true,
+        role: true,
+        address: true,
+        state: true,
+        district: true,
+        taluk: true,
+        pincode: true,
+        serviceAreaPincodes: true,
+      },
+    });
+
+    // Calculate workload count for each technician on target date
+    const workloadCounts: Record<string, number> = {};
+    for (const tech of technicians) {
+      const count = await prisma.serviceTask.count({
+        where: {
+          assignedTechnicianId: tech.id,
+          serviceDueDate: { gte: targetDate, lt: dateEnd },
+          status: { notIn: ['COMPLETED', 'CANCELLED'] },
+        },
+      });
+      workloadCounts[tech.id] = count;
+    }
+
+    const ranked = technicians.map((tech) => {
+      const techPin = (tech.pincode || '').trim();
+      const techTaluk = (tech.taluk || '').trim().toLowerCase();
+      const techDistrict = (tech.district || '').trim().toLowerCase();
+      const serviceAreaList = (tech.serviceAreaPincodes || '')
+        .split(/[\s,]+/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+
+      let matchRank = 5;
+      let matchCategory = 'OTHER';
+      let matchLabel = 'AVAILABLE TECHNICIAN';
+
+      const sPin = targetPincode.trim();
+      const sTaluk = targetTaluk.toLowerCase();
+      const sDistrict = targetDistrict.toLowerCase();
+
+      if (sPin && techPin === sPin) {
+        matchRank = 1;
+        matchCategory = 'SAME_PIN';
+        matchLabel = 'RECOMMENDED - SAME PIN CODE';
+      } else if (sTaluk && techTaluk && techTaluk === sTaluk) {
+        matchRank = 2;
+        matchCategory = 'SAME_TALUK';
+        matchLabel = 'SAME TALUK';
+      } else if (sPin && serviceAreaList.includes(sPin)) {
+        matchRank = 3;
+        matchCategory = 'SURROUNDING_PIN';
+        matchLabel = 'SURROUNDING PIN CODE';
+      } else if (sDistrict && techDistrict && techDistrict === sDistrict) {
+        matchRank = 4;
+        matchCategory = 'SAME_DISTRICT';
+        matchLabel = 'SAME DISTRICT';
+      }
+
+      return {
+        ...tech,
+        matchRank,
+        matchCategory,
+        matchLabel,
+        workloadCount: workloadCounts[tech.id] || 0,
+      };
+    });
+
+    // Sort by matchRank ascending (1 is best), then workloadCount ascending (fewer jobs is better)
+    ranked.sort((a, b) => {
+      if (a.matchRank !== b.matchRank) return a.matchRank - b.matchRank;
+      return a.workloadCount - b.workloadCount;
+    });
+
+    const resultList = ranked.map((t, index) => ({
+      ...t,
+      isTopRecommendation: index === 0,
+    }));
+
+    return res.json({
+      targetLocation: { pincode: targetPincode, taluk: targetTaluk, district: targetDistrict, date: targetDate },
+      recommendedTechnician: resultList[0] || null,
+      technicians: resultList,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function getRoutePlanningGroups(req: AuthRequest, res: Response) {
+  try {
+    const { technicianId, weekDate } = req.query;
+
+    const baseDate = weekDate ? new Date(String(weekDate)) : new Date();
+    baseDate.setHours(0, 0, 0, 0);
+
+    const dayOfWeek = baseDate.getDay();
+    const distanceToMonday = (dayOfWeek + 6) % 7; // Monday = 0
+    const weekStart = new Date(baseDate);
+    weekStart.setDate(weekStart.getDate() - distanceToMonday);
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    const where: any = {
+      serviceDueDate: { gte: weekStart, lt: weekEnd },
+      status: { notIn: ['COMPLETED', 'CANCELLED'] },
+    };
+
+    if (technicianId) {
+      where.assignedTechnicianId = String(technicianId);
+    }
+
+    const services = await prisma.serviceTask.findMany({
+      where,
+      include: { party: true, farmer: true, machine: true, assignedTechnician: true },
+      orderBy: { serviceDueDate: 'asc' },
+    });
+
+    const groupsMap: Record<string, { pincode: string; taluk: string; services: any[] }> = {};
+
+    services.forEach((s) => {
+      const pin = s.farmer?.pincode || s.party.pincode || 'Other PIN';
+      const taluk = s.farmer?.taluk || s.party.taluk || 'Other Taluk';
+      const key = `${pin}__${taluk}`;
+
+      if (!groupsMap[key]) {
+        groupsMap[key] = { pincode: pin, taluk: taluk, services: [] };
+      }
+      groupsMap[key].services.push(s);
+    });
+
+    const groups = Object.values(groupsMap).sort((a, b) => b.services.length - a.services.length);
+    const totalServices = services.length;
+    const groupableRoutes = groups.filter((g) => g.services.length >= 2).length;
+
+    return res.json({
+      weekStart: weekStart.toISOString().split('T')[0],
+      weekEnd: weekEnd.toISOString().split('T')[0],
+      totalServices,
+      groupableRoutes,
+      summaryMessage: `${totalServices} service(s) grouped into ${groups.length} location cluster(s).`,
+      groups,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function getReminderSummary(req: AuthRequest, res: Response) {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const activeServices = await prisma.serviceTask.findMany({
+      where: { status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+      include: { party: true, farmer: true, machine: true, assignedTechnician: true },
+      orderBy: { serviceDueDate: 'asc' },
+    });
+
+    const days20: any[] = [];
+    const days10: any[] = [];
+    const days7: any[] = [];
+    const days3: any[] = [];
+    const todayReminders: any[] = [];
+    const overdueReminders: any[] = [];
+
+    activeServices.forEach((s) => {
+      const dueDate = new Date(s.serviceDueDate);
+      dueDate.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((dueDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
+
+      const item = {
+        ...s,
+        diffDays,
+        formattedDueDate: dueDate.toLocaleDateString('en-IN'),
+        customerName: s.party.name,
+        farmerName: s.farmer?.name || s.party.name,
+        phone: s.farmer?.mobile || s.party.mobile,
+        pincode: s.farmer?.pincode || s.party.pincode,
+        fullAddress: s.farmer
+          ? [s.farmer.address, s.farmer.village, s.farmer.taluk, s.farmer.district].filter(Boolean).join(', ')
+          : [s.party.address, s.party.village, s.party.taluk, s.party.district].filter(Boolean).join(', '),
+      };
+
+      if (diffDays === 20) days20.push(item);
+      else if (diffDays === 10) days10.push(item);
+      else if (diffDays === 7) days7.push(item);
+      else if (diffDays === 3) days3.push(item);
+      else if (diffDays === 0) todayReminders.push(item);
+      else if (diffDays < 0) overdueReminders.push(item);
+    });
+
+    const logs = await prisma.serviceReminderLog.findMany({
+      take: 100,
+      orderBy: { createdAt: 'desc' },
+      include: { party: true, farmer: true, machine: true, serviceTask: true },
+    });
+
+    return res.json({
+      counts: {
+        days20: days20.length,
+        days10: days10.length,
+        days7: days7.length,
+        days3: days3.length,
+        today: todayReminders.length,
+        overdue: overdueReminders.length,
+        totalDue: days20.length + days10.length + days7.length + days3.length + todayReminders.length + overdueReminders.length,
+      },
+      stages: {
+        days20,
+        days10,
+        days7,
+        days3,
+        todayReminders,
+        overdueReminders,
+      },
+      recentLogs: logs,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function rescheduleServiceTask(req: AuthRequest, res: Response) {
+  try {
+    const { id } = req.params;
+    const { newServiceDueDate, reason } = req.body;
+
+    if (!newServiceDueDate) {
+      return res.status(400).json({ error: 'New service due date is required' });
+    }
+
+    const task = await prisma.serviceTask.findUnique({ where: { id } });
+    if (!task) return res.status(404).json({ error: 'Service task not found' });
+
+    const newDate = new Date(newServiceDueDate);
+
+    const updated = await prisma.serviceTask.update({
+      where: { id },
+      data: {
+        serviceDueDate: newDate,
+        status: 'RESCHEDULED',
+        technicianNotes: reason ? `Rescheduled: ${reason}` : task.technicianNotes,
+      },
+      include: { party: true, farmer: true, machine: true, assignedTechnician: true },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user?.id,
+        action: 'SERVICE_RESCHEDULE',
+        entityType: 'SERVICE',
+        entityId: id,
+        reference: task.serviceNo,
+        oldValues: JSON.stringify({ serviceDueDate: task.serviceDueDate }),
+        newValues: JSON.stringify({ serviceDueDate: newDate, reason }),
+      },
+    });
+
+    return res.json({
+      message: `Service ${task.serviceNo} rescheduled to ${newDate.toLocaleDateString('en-IN')}. Reminder schedule recalculated.`,
+      service: updated,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export async function processRemindersEndpoint(req: AuthRequest, res: Response) {
+  try {
+    const result = await processDailyServiceReminders();
+    return res.json({
+      message: `Service reminder engine processed ${result.processed} tasks. ${result.sent} reminders sent/generated, ${result.skipped} skipped/duplicates prevented.`,
+      result,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
 export async function updateServiceStatus(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
@@ -254,7 +586,7 @@ export async function updateServiceStatus(req: AuthRequest, res: Response) {
         latitude: latitude !== undefined ? Number(latitude) : task.latitude,
         longitude: longitude !== undefined ? Number(longitude) : task.longitude,
       },
-      include: { party: true, machine: true, assignedTechnician: true },
+      include: { party: true, farmer: true, machine: true, assignedTechnician: true },
     });
 
     return res.json({ service: updated });
@@ -271,12 +603,12 @@ export async function completeServiceTask(req: AuthRequest, res: Response) {
       technicianNotes,
       customerFeedback,
       serviceCharge,
-      parts, // Array of { itemId, quantity, rate }
+      parts,
     } = req.body;
 
     const task = await prisma.serviceTask.findUnique({
       where: { id },
-      include: { machine: true, party: true },
+      include: { machine: true, party: true, farmer: true },
     });
 
     if (!task) return res.status(404).json({ error: 'Service task not found' });
@@ -333,7 +665,6 @@ export async function completeServiceTask(req: AuthRequest, res: Response) {
       const grandTotal = Math.round(charge + partsTotal);
       const completedDate = new Date();
 
-      // Delete old parts if any and create new parts
       await tx.servicePart.deleteMany({ where: { serviceTaskId: id } });
 
       const completedTask = await tx.serviceTask.update({
@@ -349,7 +680,7 @@ export async function completeServiceTask(req: AuthRequest, res: Response) {
           grandTotal: grandTotal,
           parts: processedParts.length > 0 ? { create: processedParts } : undefined,
         },
-        include: { party: true, machine: true, parts: { include: { item: true } }, assignedTechnician: true },
+        include: { party: true, farmer: true, machine: true, parts: { include: { item: true } }, assignedTechnician: true },
       });
 
       // STEP 2: Calculate Next Service Date based on Machine Calendar Interval
@@ -359,7 +690,6 @@ export async function completeServiceTask(req: AuthRequest, res: Response) {
 
       const nextDate = addIntervalToDate(completedDate, intervalVal, intervalUnit);
 
-      // Update Machine with last and next service dates
       await tx.machine.update({
         where: { id: machine.id },
         data: {
@@ -369,13 +699,14 @@ export async function completeServiceTask(req: AuthRequest, res: Response) {
       });
 
       // STEP 3: Automatically create next Service Task
-      const { docNumber: nextSrvNo } = await generateDocumentNumber('SERVICE', 'SRV', tx);
+      const { docNumber: nextSrvNo } = await generateDocumentNumber('SERVICE', nextDate, tx);
 
       await tx.serviceTask.create({
         data: {
           serviceNo: nextSrvNo,
           machineId: machine.id,
           partyId: machine.partyId,
+          farmerId: machine.farmerId || null,
           serialNumber: machine.serialNumber,
           serviceDueDate: nextDate,
           serviceIntervalDays: machine.serviceIntervalDays,
@@ -386,7 +717,6 @@ export async function completeServiceTask(req: AuthRequest, res: Response) {
         },
       });
 
-      // Audit Log
       await tx.auditLog.create({
         data: {
           userId: req.user?.id,
@@ -468,7 +798,6 @@ export async function sendTechnicianDispatchWhatsApp(req: AuthRequest, res: Resp
       });
     }
 
-    // Log dispatch
     await prisma.serviceReminderLog.create({
       data: {
         partyId: jobs[0].partyId,
@@ -506,7 +835,7 @@ export async function remindAllTodayCustomers(req: AuthRequest, res: Response) {
         serviceDueDate: { gte: today, lt: tomorrow },
         status: { notIn: ['COMPLETED', 'CANCELLED'] },
       },
-      include: { party: true, machine: true },
+      include: { party: true, farmer: true, machine: true },
     });
 
     const config = await getWhatsAppSettings();
@@ -521,7 +850,6 @@ export async function remindAllTodayCustomers(req: AuthRequest, res: Response) {
         continue;
       }
 
-      // Check if already sent today
       const alreadySent = await prisma.serviceReminderLog.findFirst({
         where: {
           serviceTaskId: task.id,
@@ -573,7 +901,6 @@ export async function remindAllTodayCustomers(req: AuthRequest, res: Response) {
           });
         }
       } else {
-        // Manual mode log
         sentCount++;
         await prisma.serviceReminderLog.create({
           data: {
@@ -606,7 +933,7 @@ export async function getReminderLogs(req: AuthRequest, res: Response) {
     const logs = await prisma.serviceReminderLog.findMany({
       take: 100,
       orderBy: { createdAt: 'desc' },
-      include: { party: true, machine: true, serviceTask: true },
+      include: { party: true, farmer: true, machine: true, serviceTask: true },
     });
 
     return res.json({ logs });
@@ -685,6 +1012,7 @@ export async function getTechnicianTodayJobs(req: AuthRequest, res: Response) {
       },
       include: {
         party: true,
+        farmer: true,
         machine: { include: { machineItem: true } },
       },
       orderBy: { serviceDueDate: 'asc' },

@@ -18,6 +18,9 @@ import {
   Clock,
   ShieldCheck,
   ShieldAlert,
+  RotateCcw,
+  Bell,
+  Navigation,
 } from 'lucide-react';
 
 import { ServiceCompletionModal } from '../components/ServiceCompletionModal';
@@ -27,6 +30,9 @@ import { WhatsAppTechnicianDispatchModal } from '../components/WhatsAppTechnicia
 import { BulkReminderProgressModal } from '../components/BulkReminderProgressModal';
 import { ReminderLogModal } from '../components/ReminderLogModal';
 import { ServiceCalendarModal } from '../components/ServiceCalendarModal';
+import { ServiceRescheduleModal } from '../components/ServiceRescheduleModal';
+import { ReminderDashboardModal } from '../components/ReminderDashboardModal';
+import { RoutePlanningModal } from '../components/RoutePlanningModal';
 
 export const ServiceManagement: React.FC = () => {
   const [services, setServices] = useState<any[]>([]);
@@ -57,6 +63,9 @@ export const ServiceManagement: React.FC = () => {
   const [showBulkRemindModal, setShowBulkRemindModal] = useState<boolean>(false);
   const [showReminderLogs, setShowReminderLogs] = useState<boolean>(false);
   const [showCalendarModal, setShowCalendarModal] = useState<boolean>(false);
+  const [showReminderDashboard, setShowReminderDashboard] = useState<boolean>(false);
+  const [showRoutePlanningModal, setShowRoutePlanningModal] = useState<boolean>(false);
+  const [reschedulingService, setReschedulingService] = useState<any | null>(null);
 
   useEffect(() => {
     loadSummary();
@@ -124,6 +133,25 @@ export const ServiceManagement: React.FC = () => {
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress || party.name)}`;
   };
 
+  // Prefilled wa.me link generator for WhatsApp messaging
+  const getWhatsAppUrl = (srv: any) => {
+    const p = srv.party || {};
+    const f = srv.farmer;
+    const phone = (f?.mobile || p.mobile || '').replace(/\D/g, '');
+    if (!phone) return '#';
+    const formattedPhone = phone.length === 10 ? '91' + phone : phone;
+
+    const name = f?.name || p.name || 'Customer';
+    const machineName = srv.machine?.model || 'Equipment';
+    const dueDate = new Date(srv.serviceDueDate).toLocaleDateString('en-IN');
+    const pincode = f?.pincode || p.pincode || 'N/A';
+    const address = [f?.address || f?.village || p.address || p.village, f?.taluk || p.taluk, f?.district || p.district, pincode].filter(Boolean).join(', ');
+
+    const msg = `Hello ${name},\n\nThis is a service reminder from Smart Agro Machinerys.\n\nService Job No: ${srv.serviceNo}\nMachine: ${machineName} (Serial No: ${srv.serialNumber || 'N/A'})\nScheduled Date: ${dueDate}\nLocation: ${address}\n\nPlease contact us to confirm your service appointment.\n\nThank you,\nSmart Agro Machinerys`;
+
+    return `https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`;
+  };
+
   // Search Filtering
   const filteredServices = services.filter((s) => {
     const q = searchQuery.toLowerCase().trim();
@@ -133,7 +161,9 @@ export const ServiceManagement: React.FC = () => {
       s.serialNumber?.toLowerCase().includes(q) ||
       s.party?.name?.toLowerCase().includes(q) ||
       s.party?.mobile?.toLowerCase().includes(q) ||
-      s.machine?.model?.toLowerCase().includes(q)
+      s.machine?.model?.toLowerCase().includes(q) ||
+      (s.farmer?.pincode && s.farmer.pincode.includes(q)) ||
+      (s.party?.pincode && s.party.pincode.includes(q))
     );
   });
 
@@ -151,6 +181,22 @@ export const ServiceManagement: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowReminderDashboard(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl font-bold text-xs shadow-sm transition"
+          >
+            <Bell className="w-4 h-4" />
+            <span>Reminder Dashboard</span>
+          </button>
+
+          <button
+            onClick={() => setShowRoutePlanningModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl font-bold text-xs shadow-sm transition"
+          >
+            <Navigation className="w-4 h-4" />
+            <span>Route Planning</span>
+          </button>
+
           <button
             onClick={() => setShowCalendarModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs transition"
@@ -172,7 +218,7 @@ export const ServiceManagement: React.FC = () => {
             className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-800 text-white rounded-xl font-bold text-xs hover:bg-emerald-900 shadow-md transition"
           >
             <Send className="w-4 h-4" />
-            <span>Remind Today's Customers ({summary.servicesToday})</span>
+            <span>Remind Today's ({summary.servicesToday})</span>
           </button>
 
           <button
@@ -180,7 +226,7 @@ export const ServiceManagement: React.FC = () => {
             className="flex items-center gap-1.5 px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl font-bold text-xs transition"
           >
             <History className="w-4 h-4 text-gray-600" />
-            <span>Reminder Logs</span>
+            <span>Logs</span>
           </button>
         </div>
       </div>
@@ -253,10 +299,10 @@ export const ServiceManagement: React.FC = () => {
         <div className="flex bg-gray-100 p-1 rounded-xl overflow-x-auto">
           {[
             { id: 'today', label: "Today's Due" },
-            { id: 'tomorrow', label: 'Tomorrow' },
-            { id: 'this_week', label: 'This Week' },
-            { id: 'overdue', label: 'Overdue' },
+            { id: 'reminder_due', label: 'Reminder Due' },
             { id: 'upcoming', label: 'Upcoming' },
+            { id: 'overdue', label: 'Overdue' },
+            { id: 'nearby_services', label: 'Nearby Services' },
             { id: 'completed', label: 'Completed' },
           ].map((tab) => (
             <button
@@ -393,6 +439,11 @@ export const ServiceManagement: React.FC = () => {
                           <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
                           <span>{[srv.farmer.address || srv.farmer.village, srv.farmer.district, srv.farmer.state].filter(Boolean).join(', ')}</span>
                         </div>
+                        <div className="mt-1">
+                          <span className="font-mono bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded text-[11px] font-bold">
+                            PIN: {srv.farmer.pincode || 'N/A'} {srv.farmer.taluk ? `• ${srv.farmer.taluk}` : ''}
+                          </span>
+                        </div>
                       </>
                     ) : (
                       <>
@@ -406,6 +457,11 @@ export const ServiceManagement: React.FC = () => {
                         <div className="flex items-start gap-1.5 text-gray-600 pt-0.5">
                           <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
                           <span>{[p.address, p.village, p.district].filter(Boolean).join(', ') || 'No address'}</span>
+                        </div>
+                        <div className="mt-1">
+                          <span className="font-mono bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded text-[11px] font-bold">
+                            PIN: {p.pincode || 'N/A'} {p.taluk ? `• ${p.taluk}` : ''}
+                          </span>
                         </div>
                       </>
                     )}
@@ -447,13 +503,25 @@ export const ServiceManagement: React.FC = () => {
                       <Phone className="w-3.5 h-3.5" /> Call
                     </a>
 
-                    {/* WhatsApp Customer */}
-                    <button
-                      onClick={() => setWhatsAppCustomerService(srv)}
+                    {/* Direct wa.me WhatsApp Link */}
+                    <a
+                      href={getWhatsAppUrl(srv)}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center gap-1 shadow-sm transition"
                     >
-                      <MessageSquare className="w-3.5 h-3.5" /> WhatsApp Customer
-                    </button>
+                      <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
+                    </a>
+
+                    {/* Reschedule Button */}
+                    {srv.status !== 'COMPLETED' && (
+                      <button
+                        onClick={() => setReschedulingService(srv)}
+                        className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold rounded-xl flex items-center gap-1 transition"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" /> Reschedule
+                      </button>
+                    )}
 
                     {/* Assign Technician */}
                     <button
@@ -480,7 +548,7 @@ export const ServiceManagement: React.FC = () => {
                       rel="noopener noreferrer"
                       className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl flex items-center gap-1 transition"
                     >
-                      <MapPin className="w-3.5 h-3.5 text-red-600" /> Open Map <ExternalLink className="w-3 h-3 text-gray-400" />
+                      <MapPin className="w-3.5 h-3.5 text-red-600" /> Map <ExternalLink className="w-3 h-3 text-gray-400" />
                     </a>
                   </div>
 
@@ -561,6 +629,38 @@ export const ServiceManagement: React.FC = () => {
             loadServices();
           }}
           onClose={() => setShowCalendarModal(false)}
+        />
+      )}
+
+      {/* Service Reschedule Modal */}
+      {reschedulingService && (
+        <ServiceRescheduleModal
+          service={reschedulingService}
+          onRescheduled={() => {
+            setReschedulingService(null);
+            loadSummary();
+            loadServices();
+          }}
+          onClose={() => setReschedulingService(null)}
+        />
+      )}
+
+      {/* Reminder Dashboard Modal */}
+      {showReminderDashboard && (
+        <ReminderDashboardModal
+          onClose={() => setShowReminderDashboard(false)}
+          onOpenReschedule={(srv) => setReschedulingService(srv)}
+          onOpenComplete={(srv) => setCompletingService(srv)}
+          onOpenAssign={(srvId) => setAssigningServiceIds([srvId])}
+        />
+      )}
+
+      {/* Route Planning Modal */}
+      {showRoutePlanningModal && (
+        <RoutePlanningModal
+          onClose={() => setShowRoutePlanningModal(false)}
+          technicians={technicians}
+          onOpenAssign={(srvIds) => setAssigningServiceIds(srvIds)}
         />
       )}
 

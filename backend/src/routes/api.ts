@@ -14,7 +14,7 @@ import { getDeliveryChallans, getDeliveryChallanById, createDeliveryChallan, upd
 import { getPurchases, getPurchaseById, createPurchase, updatePurchase, deletePurchase } from '../controllers/purchases';
 import { getPayments, createPayment } from '../controllers/payments';
 import { getMachines, getMachineBySerial, createMachine } from '../controllers/machines';
-import { getServices, getTodayServicesSummary, createServiceTask, updateServiceStatus, completeServiceTask, assignTechnician, sendTechnicianDispatchWhatsApp, remindAllTodayCustomers, getReminderLogs, sendPaymentReminderWhatsApp, getTechnicianTodayJobs } from '../controllers/services';
+import { getServices, getTodayServicesSummary, createServiceTask, updateServiceStatus, completeServiceTask, assignTechnician, sendTechnicianDispatchWhatsApp, remindAllTodayCustomers, getReminderLogs, sendPaymentReminderWhatsApp, getTechnicianTodayJobs, getRecommendedTechnicians, getRoutePlanningGroups, getReminderSummary, rescheduleServiceTask, processRemindersEndpoint } from '../controllers/services';
 import { getWhatsAppConfigHandler, updateWhatsAppConfigHandler, testWhatsAppConnectionHandler } from '../controllers/whatsappSettings';
 import { getExpenses, createExpense } from '../controllers/expenses';
 import { getDashboardStats, getGSTReport, getStockLedgerReport, getPartyLedgerReport, getProfitAndLossReport } from '../controllers/reports';
@@ -135,8 +135,13 @@ router.post('/machines', createMachine);
 // Services & Technician Mobile Interface
 router.get('/services', getServices);
 router.get('/services/summary', getTodayServicesSummary);
+router.get('/services/technicians/recommended', getRecommendedTechnicians);
+router.get('/services/route-planning', getRoutePlanningGroups);
+router.get('/services/reminders/summary', getReminderSummary);
+router.post('/services/reminders/process', processRemindersEndpoint);
 router.post('/services', createServiceTask);
 router.post('/services/assign', assignTechnician);
+router.put('/services/:id/reschedule', rescheduleServiceTask);
 router.put('/services/:id/status', updateServiceStatus);
 router.put('/services/:id/complete', completeServiceTask);
 router.post('/services/dispatch-whatsapp', sendTechnicianDispatchWhatsApp);
