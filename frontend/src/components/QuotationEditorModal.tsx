@@ -3,6 +3,7 @@ import { apiRequest } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { X, Plus, Trash2, Save, Layers, Building, HelpCircle, Check, FileText } from 'lucide-react';
 import { SearchablePartyCombobox } from './SearchablePartyCombobox';
+import { BillingItemSelect } from './BillingItemSelect';
 import { isInterStateTransaction, normalizeStateCode } from '../utils/gstHelper';
 
 interface QuotationEditorModalProps {
@@ -513,19 +514,13 @@ export const QuotationEditorModal: React.FC<QuotationEditorModalProps> = ({
                         
                         {/* Item Select */}
                         <td className="p-2">
-                          <select
+                          <BillingItemSelect
                             value={row.itemId}
-                            onChange={(e) => handleItemSelect(idx, e.target.value)}
-                            required
+                            onChange={(itemId) => handleItemSelect(idx, itemId)}
+                            items={availableItems}
+                            documentType="QUOTATION"
                             className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:border-emerald-600 focus:outline-none"
-                          >
-                            <option value="">-- Choose Item --</option>
-                            {availableItems.map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.name} ({item.sku}) - ₹{item.sellingPrice}
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </td>
 
                         {/* HSN/SAC */}

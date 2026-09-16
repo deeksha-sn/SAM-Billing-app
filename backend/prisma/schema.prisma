@@ -166,6 +166,16 @@ model Item {
   name                  String
   sku                   String   @unique
   type                  String   @default("FINISHED_MACHINE") // FINISHED_MACHINE, RAW_MATERIAL, SPARE_PART, COMPONENT, SERVICE, OTHER
+  itemCategory          String   @default("OTHER") // MILKING_MACHINE, CHAFF_CUTTER, SPRAYER, PRESSURE_WASHER, SOLAR_MACHINE, BATTERY_PETROL_MACHINE, FINISHED_MACHINE, SPARE_PART, COMPONENT, RAW_MATERIAL, OTHER
+  categoryLabel         String?  @default("Other / Miscellaneous")
+  subcategory           String?
+  showInBilling         Boolean  @default(true)
+  isSellable            Boolean  @default(true)
+  allowSales            Boolean  @default(true)
+  allowQuotation        Boolean  @default(true)
+  allowPurchase         Boolean  @default(true)
+  allowDC               Boolean  @default(true)
+  allowService          Boolean  @default(true)
   categoryId            String?
   unit                  String   @default("Nos")
   hsnSac                String   @default("8436")

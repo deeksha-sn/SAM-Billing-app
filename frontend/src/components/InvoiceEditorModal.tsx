@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { QuickAddPartyModal } from './QuickAddPartyModal';
 import { QuickAddItemModal } from './QuickAddItemModal';
 import { SearchablePartyCombobox } from './SearchablePartyCombobox';
+import { BillingItemSelect } from './BillingItemSelect';
 import { INDIAN_STATES, getStateNameFromCode, isInterStateTransaction, normalizeStateCode } from '../utils/gstHelper';
 
 interface InvoiceEditorModalProps {
@@ -622,18 +623,13 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
                         <td className="p-2 text-center font-bold text-slate-500">{idx + 1}</td>
                         
                         <td className="p-2 space-y-1">
-                          <select
+                          <BillingItemSelect
                             value={line.itemId}
-                            onChange={(e) => handleLineItemChange(idx, e.target.value)}
+                            onChange={(itemId) => handleLineItemChange(idx, itemId)}
+                            items={dbItems}
+                            documentType="SALES"
                             className="w-full p-2 border rounded-lg font-semibold text-slate-900 bg-white"
-                          >
-                            <option value="">-- Select Item --</option>
-                            {dbItems.map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.name} | Stock: {item.currentStock} | ₹{item.sellingPrice}
-                              </option>
-                            ))}
-                          </select>
+                          />
 
                           {line.itemId && (
                             <input

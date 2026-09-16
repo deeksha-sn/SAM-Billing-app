@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../api';
-import { Package, Plus, AlertTriangle, Layers, Edit3, Sliders, X, History } from 'lucide-react';
+import { Package, Plus, Edit3, Sliders, X, Layers } from 'lucide-react';
 import { QuickAddItemModal } from '../components/QuickAddItemModal';
 
 export const Inventory: React.FC = () => {
@@ -22,6 +22,11 @@ export const Inventory: React.FC = () => {
   const [adjType, setAdjType] = useState('ADJUSTMENT_IN');
   const [adjQty, setAdjQty] = useState('1');
   const [adjReason, setAdjReason] = useState('Physical Stock Audit');
+
+  // Category Filtering & Collapsible Sections State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoryTab, setSelectedCategoryTab] = useState<string>('ALL');
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     loadItems();
@@ -104,42 +109,119 @@ export const Inventory: React.FC = () => {
     }
   };
 
+  const toggleSection = (sectionKey: string) => {
+    setCollapsedSections((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
+  };
+
+  const CATEGORY_TABS = [
+    { key: 'ALL', label: 'ALL', icon: '📋' },
+    { key: 'READY_MACHINES', label: 'READY MACHINES', icon: '🚜' },
+    { key: 'MILKING_MACHINE', label: 'MILKING MACHINES', icon: '🥛' },
+    { key: 'CHAFF_CUTTER', label: 'CHAFF CUTTERS', icon: '🌾' },
+    { key: 'SPRAYER', label: 'SPRAYERS', icon: '💧' },
+    { key: 'PRESSURE_WASHER', label: 'PRESSURE WASHERS', icon: '🌊' },
+    { key: 'SPARE_PART', label: 'SPARE PARTS', icon: '🔧' },
+    { key: 'COMPONENT', label: 'COMPONENTS', icon: '⚙️' },
+    { key: 'RAW_MATERIAL', label: 'RAW MATERIALS', icon: '🧱' },
+    { key: 'OTHER', label: 'OTHER', icon: '📦' },
+  ];
+
+  // Helper to categorize an item into its main section key
+  const getItemCategoryKey = (item: any): string => {
+    const cat = item.itemCategory || '';
+    const type = item.type || '';
+    const name = (item.name || '').toLowerCase();
+
+    if (cat === 'MILKING_MACHINE' || name.includes('milking')) return 'MILKING_MACHINE';
+    if (cat === 'CHAFF_CUTTER' || name.includes('chaff')) return 'CHAFF_CUTTER';
+    if (cat === 'SPRAYER' || name.includes('sprayer') || name.includes('fogger')) return 'SPRAYER';
+    if (cat === 'PRESSURE_WASHER' || name.includes('washer') || name.includes('pressure')) return 'PRESSURE_WASHER';
+    if (cat === 'SOLAR_MACHINE' || name.includes('solar')) return 'SOLAR_MACHINE';
+    if (cat === 'BATTERY_PETROL_MACHINE' || name.includes('brush') || name.includes('auger') || name.includes('petrol')) return 'BATTERY_PETROL_MACHINE';
+    if (cat === 'SPARE_PART' || type === 'SPARE_PART') return 'SPARE_PART';
+    if (cat === 'COMPONENT' || type === 'COMPONENT') return 'COMPONENT';
+    if (cat === 'RAW_MATERIAL' || type === 'RAW_MATERIAL') return 'RAW_MATERIAL';
+    if (cat === 'FINISHED_MACHINE' || type === 'FINISHED_MACHINE') return 'READY_MACHINES';
+    return 'OTHER';
+  };
+
+  const SECTION_DEFINITIONS = [
+    { key: 'MILKING_MACHINE', title: 'MILKING MACHINES', icon: '🥛', color: 'border-blue-300 bg-blue-50/50 text-blue-900' },
+    { key: 'CHAFF_CUTTER', title: 'CHAFF CUTTERS', icon: '🌾', color: 'border-amber-300 bg-amber-50/50 text-amber-900' },
+    { key: 'SPRAYER', title: 'SPRAYERS / FOGGERS', icon: '💧', color: 'border-sky-300 bg-sky-50/50 text-sky-900' },
+    { key: 'PRESSURE_WASHER', title: 'PRESSURE WASHERS', icon: '🌊', color: 'border-cyan-300 bg-cyan-50/50 text-cyan-900' },
+    { key: 'SOLAR_MACHINE', title: 'SOLAR MACHINES', icon: '☀️', color: 'border-yellow-300 bg-yellow-50/50 text-yellow-900' },
+    { key: 'BATTERY_PETROL_MACHINE', title: 'BATTERY / PETROL MACHINES', icon: '🔋', color: 'border-orange-300 bg-orange-50/50 text-orange-900' },
+    { key: 'READY_MACHINES', title: 'READY / FINISHED MACHINES', icon: '🚜', color: 'border-emerald-300 bg-emerald-50/50 text-emerald-900' },
+    { key: 'SPARE_PART', title: 'SPARE PARTS', icon: '🔧', color: 'border-indigo-300 bg-indigo-50/50 text-indigo-900' },
+    { key: 'COMPONENT', title: 'COMPONENTS', icon: '⚙️', color: 'border-purple-300 bg-purple-50/50 text-purple-900' },
+    { key: 'RAW_MATERIAL', title: 'RAW MATERIALS', icon: '🧱', color: 'border-rose-300 bg-rose-50/50 text-rose-900' },
+    { key: 'OTHER', title: 'OTHER / MISCELLANEOUS', icon: '📦', color: 'border-gray-300 bg-gray-50 text-gray-900' },
+  ];
+
+  // Filter items based on searchQuery & selectedCategoryTab
+  const filteredItems = items.filter((item) => {
+    // 1. Search Query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchName = (item.name || '').toLowerCase().includes(q);
+      const matchSku = (item.sku || '').toLowerCase().includes(q);
+      const matchHsn = (item.hsnSac || '').toLowerCase().includes(q);
+      const matchCat = (item.categoryLabel || item.itemCategory || '').toLowerCase().includes(q);
+      const matchSub = (item.subcategory || '').toLowerCase().includes(q);
+      if (!matchName && !matchSku && !matchHsn && !matchCat && !matchSub) return false;
+    }
+
+    // 2. Category Tab Filter
+    if (selectedCategoryTab === 'ALL') return true;
+    const catKey = getItemCategoryKey(item);
+
+    if (selectedCategoryTab === 'READY_MACHINES') {
+      return ['MILKING_MACHINE', 'CHAFF_CUTTER', 'SPRAYER', 'PRESSURE_WASHER', 'SOLAR_MACHINE', 'BATTERY_PETROL_MACHINE', 'READY_MACHINES'].includes(catKey);
+    }
+
+    return catKey === selectedCategoryTab;
+  });
+
   const finishedMachines = items.filter((i) => i.type === 'FINISHED_MACHINE');
   const componentItems = items.filter((i) => i.type !== 'FINISHED_MACHINE');
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Inventory & BOM Management</h1>
-          <p className="text-sm text-gray-500">Real-time Stock Ledger, Minimum Stock Alerts & Multi-component BOM</p>
+          <h1 className="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2">
+            <Package className="w-7 h-7 text-emerald-600" />
+            <span>Item Master & Inventory Catalog</span>
+          </h1>
+          <p className="text-xs text-gray-500">Organized ready machines, spare parts, raw materials, BOM builder, & stock ledger</p>
         </div>
         <button
           onClick={() => setShowCreateItem(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-md transition"
+          className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-black hover:bg-emerald-700 shadow-md transition text-xs"
         >
           <Plus className="w-5 h-5" />
           <span>+ Add Product / Item</span>
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex bg-gray-200 p-1 rounded-xl w-fit">
+      {/* Main Tabs */}
+      <div className="flex bg-gray-200 p-1 rounded-xl w-fit text-xs font-bold">
         <button
           onClick={() => setActiveTab('ITEMS')}
-          className={`px-5 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'ITEMS' ? 'bg-white text-emerald-800 shadow' : 'text-gray-600'}`}
+          className={`px-5 py-2 rounded-lg transition ${activeTab === 'ITEMS' ? 'bg-white text-emerald-900 shadow font-black' : 'text-gray-600'}`}
         >
           Items Directory ({items.length})
         </button>
         <button
           onClick={() => setActiveTab('BOM')}
-          className={`px-5 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'BOM' ? 'bg-white text-purple-800 shadow' : 'text-gray-600'}`}
+          className={`px-5 py-2 rounded-lg transition ${activeTab === 'BOM' ? 'bg-white text-purple-900 shadow font-black' : 'text-gray-600'}`}
         >
           BOM (Bill of Materials) ({boms.length})
         </button>
         <button
           onClick={() => setActiveTab('LEDGER')}
-          className={`px-5 py-2 rounded-lg font-bold text-xs transition ${activeTab === 'LEDGER' ? 'bg-white text-blue-800 shadow' : 'text-gray-600'}`}
+          className={`px-5 py-2 rounded-lg transition ${activeTab === 'LEDGER' ? 'bg-white text-blue-900 shadow font-black' : 'text-gray-600'}`}
         >
           Stock Ledger Movement History
         </button>
@@ -147,64 +229,161 @@ export const Inventory: React.FC = () => {
 
       {/* TAB 1: ITEMS DIRECTORY */}
       {activeTab === 'ITEMS' && (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 border-b text-gray-700 font-bold uppercase text-xs">
-              <tr>
-                <th className="p-4">SKU / Code</th>
-                <th className="p-4">Item Name</th>
-                <th className="p-4">Type</th>
-                <th className="p-4">HSN</th>
-                <th className="p-4">GST %</th>
-                <th className="p-4">Selling Price</th>
-                <th className="p-4">Current Stock</th>
-                <th className="p-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {items.map((item) => {
-                const isLow = item.currentStock <= item.minStock;
-                return (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="p-4 font-bold font-mono text-emerald-800">{item.sku}</td>
-                    <td className="p-4 font-semibold text-gray-900">{item.name}</td>
-                    <td className="p-4">
-                      <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded bg-gray-100 text-gray-700">
-                        {item.type.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="p-4 font-mono text-gray-600">{item.hsnSac}</td>
-                    <td className="p-4 font-mono text-gray-600">{item.gstRate}%</td>
-                    <td className="p-4 font-mono font-bold">₹{item.sellingPrice.toLocaleString('en-IN')}</td>
-                    <td className="p-4">
-                      <span className={`px-2.5 py-1 text-xs font-bold rounded-full font-mono ${
-                        isLow ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-green-100 text-green-800'
-                      }`}>
-                        {item.currentStock} {item.unit} {isLow && '(LOW)'}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => setEditingItem(item)}
-                          className="p-1.5 text-amber-700 hover:bg-amber-50 rounded-lg transition"
-                          title="Edit Item"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setShowStockModal(item)}
-                          className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold text-xs rounded-lg border inline-flex items-center gap-1"
-                        >
-                          <Sliders className="w-3.5 h-3.5" /> Adjust Stock
-                        </button>
+        <div className="space-y-4">
+          {/* Category Filter Tabs & Search Bar */}
+          <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm space-y-3">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+              {/* Category Filter Pills */}
+              <div className="flex flex-wrap gap-1.5">
+                {CATEGORY_TABS.map((tab) => {
+                  const isActive = selectedCategoryTab === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      onClick={() => setSelectedCategoryTab(tab.key)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                        isActive
+                          ? 'bg-slate-900 text-white shadow-sm font-black ring-2 ring-emerald-500'
+                          : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                      }`}
+                    >
+                      <span>{tab.icon}</span>
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Search Bar */}
+              <div className="w-full md:w-72 shrink-0">
+                <input
+                  type="text"
+                  placeholder="Search item, SKU, HSN, category..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-gray-50 border border-gray-300 rounded-xl text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-emerald-500 transition"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Collapsible Category Sections */}
+          <div className="space-y-4">
+            {SECTION_DEFINITIONS.map((secDef) => {
+              // Get items belonging to this section
+              const sectionItems = filteredItems.filter((i) => getItemCategoryKey(i) === secDef.key);
+              if (sectionItems.length === 0) return null;
+
+              const isCollapsed = collapsedSections[secDef.key] || false;
+              const totalStock = sectionItems.reduce((acc, i) => acc + i.currentStock, 0);
+
+              return (
+                <div key={secDef.key} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition">
+                  {/* Collapsible Section Header */}
+                  <div
+                    onClick={() => toggleSection(secDef.key)}
+                    className={`p-4 border-b flex justify-between items-center cursor-pointer hover:opacity-95 transition ${secDef.color}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{secDef.icon}</span>
+                      <div>
+                        <h3 className="font-black text-sm uppercase tracking-wider">{secDef.title}</h3>
+                        <p className="text-[11px] opacity-80 font-medium">
+                          {sectionItems.length} Products | Total Stock: {totalStock} units
+                        </p>
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className="px-2.5 py-1 text-[11px] font-black rounded-full bg-white/80 border text-gray-900">
+                        {sectionItems.length} items
+                      </span>
+                      <button className="text-gray-700 font-black text-lg">
+                        {isCollapsed ? '➕' : '➖'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Section Items Table */}
+                  {!isCollapsed && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-gray-50 border-b text-gray-600 font-bold uppercase text-[10px]">
+                          <tr>
+                            <th className="p-3.5">SKU / Code</th>
+                            <th className="p-3.5">Item Name</th>
+                            <th className="p-3.5">Subcategory</th>
+                            <th className="p-3.5">HSN</th>
+                            <th className="p-3.5">GST %</th>
+                            <th className="p-3.5">Selling Price</th>
+                            <th className="p-3.5">Visibility</th>
+                            <th className="p-3.5">Current Stock</th>
+                            <th className="p-3.5 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {sectionItems.map((item) => {
+                            const isLow = item.currentStock <= item.minStock;
+                            const isBilling = item.showInBilling !== false;
+
+                            return (
+                              <tr key={item.id} className="hover:bg-slate-50/80 transition">
+                                <td className="p-3.5 font-bold font-mono text-emerald-800">{item.sku}</td>
+                                <td className="p-3.5 font-black text-gray-900 text-xs">
+                                  {item.name}
+                                </td>
+                                <td className="p-3.5">
+                                  <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-gray-100 text-gray-700">
+                                    {item.subcategory || 'Standard'}
+                                  </span>
+                                </td>
+                                <td className="p-3.5 font-mono text-gray-600">{item.hsnSac}</td>
+                                <td className="p-3.5 font-mono text-gray-600">{item.gstRate}%</td>
+                                <td className="p-3.5 font-mono font-bold text-gray-900">
+                                  ₹{item.sellingPrice ? item.sellingPrice.toLocaleString('en-IN') : '0'}
+                                </td>
+                                <td className="p-3.5">
+                                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md border ${
+                                    isBilling ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'
+                                  }`}>
+                                    {isBilling ? 'Customer Billing' : 'Internal Only'}
+                                  </span>
+                                </td>
+                                <td className="p-3.5">
+                                  <span className={`px-2.5 py-1 text-xs font-bold rounded-full font-mono ${
+                                    isLow ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-green-100 text-green-800'
+                                  }`}>
+                                    {item.currentStock} {item.unit} {isLow && '(LOW)'}
+                                  </span>
+                                </td>
+                                <td className="p-3.5 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      onClick={() => setEditingItem(item)}
+                                      className="p-1.5 text-amber-700 hover:bg-amber-50 rounded-lg transition"
+                                      title="Edit Item"
+                                    >
+                                      <Edit3 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => setShowStockModal(item)}
+                                      className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold text-[11px] rounded-lg border inline-flex items-center gap-1"
+                                    >
+                                      <Sliders className="w-3.5 h-3.5" /> Adjust Stock
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

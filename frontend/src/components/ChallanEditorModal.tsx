@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Save, Truck } from 'lucide-react';
 import { apiRequest } from '../api';
 import { SearchablePartyCombobox } from './SearchablePartyCombobox';
+import { BillingItemSelect } from './BillingItemSelect';
 
 interface ChallanEditorModalProps {
   challan?: any;
@@ -311,18 +312,13 @@ export const ChallanEditorModal: React.FC<ChallanEditorModalProps> = ({
                     <tr key={idx} className="hover:bg-gray-50/50">
                       <td className="p-3 text-center text-gray-400 font-bold">{idx + 1}</td>
                       <td className="p-2">
-                        <select
+                        <BillingItemSelect
                           value={row.itemId}
-                          onChange={(e) => handleItemChange(idx, e.target.value)}
+                          onChange={(itemId) => handleItemChange(idx, itemId)}
+                          items={itemsList}
+                          documentType="DELIVERY_CHALLAN"
                           className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs font-semibold"
-                        >
-                          <option value="">-- Select Item --</option>
-                          {itemsList.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name} (Available Stock: {item.currentStock})
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </td>
                       <td className="p-2 text-center font-bold text-gray-600">
                         {row.unit || 'Nos'}

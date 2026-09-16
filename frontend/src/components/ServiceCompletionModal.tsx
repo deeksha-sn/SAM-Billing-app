@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2, Plus, Trash2, Wrench, Calendar, Sparkles } from 'lucide-react';
 import { apiRequest } from '../api';
+import { BillingItemSelect } from './BillingItemSelect';
 
 interface ServiceCompletionModalProps {
   service: any;
@@ -229,18 +230,13 @@ export const ServiceCompletionModal: React.FC<ServiceCompletionModalProps> = ({
                     {usedParts.map((row, idx) => (
                       <tr key={idx}>
                         <td className="p-1.5">
-                          <select
+                          <BillingItemSelect
                             value={row.itemId}
-                            onChange={(e) => handlePartChange(idx, e.target.value)}
+                            onChange={(itemId) => handlePartChange(idx, itemId)}
+                            items={availableItems}
+                            documentType="SERVICE"
                             className="w-full p-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium"
-                          >
-                            <option value="">-- Select Spare Part --</option>
-                            {availableItems.map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.name} (Stock: {item.currentStock})
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </td>
                         <td className="p-1.5">
                           <input

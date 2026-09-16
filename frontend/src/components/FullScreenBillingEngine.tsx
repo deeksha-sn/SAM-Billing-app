@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { apiRequest } from '../api';
+import { BillingItemSelect } from './BillingItemSelect';
 import {
   INDIAN_STATES,
   VALID_GST_RATES,
@@ -744,18 +745,13 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
                     
                     {/* Item Select */}
                     <td className="p-2">
-                      <select
+                      <BillingItemSelect
                         value={row.itemId}
-                        onChange={(e) => handleItemSelect(idx, e.target.value)}
+                        onChange={(itemId) => handleItemSelect(idx, itemId)}
+                        items={itemsMaster}
+                        documentType={isInvoice ? 'SALES' : isQuotation ? 'QUOTATION' : isPurchase ? 'PURCHASE' : isChallan ? 'DELIVERY_CHALLAN' : 'SALES'}
                         className="w-full p-2 bg-slate-900 border border-slate-600 rounded-xl font-bold text-white text-xs"
-                      >
-                        <option value="">-- Select Item --</option>
-                        {itemsMaster.map((i) => (
-                          <option key={i.id} value={i.id}>
-                            {i.name} (Stock: {i.currentStock})
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </td>
 
                     {/* Item Description */}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Save, ShoppingBag, UserPlus } from 'lucide-react';
 import { apiRequest } from '../api';
 import { SearchablePartyCombobox } from './SearchablePartyCombobox';
+import { BillingItemSelect } from './BillingItemSelect';
 
 interface PurchaseEditorModalProps {
   purchase?: any;
@@ -322,18 +323,13 @@ export const PurchaseEditorModal: React.FC<PurchaseEditorModalProps> = ({
                       <tr key={idx} className="hover:bg-gray-50/50">
                         <td className="p-3 text-center text-gray-400 font-bold">{idx + 1}</td>
                         <td className="p-2">
-                          <select
+                          <BillingItemSelect
                             value={row.itemId}
-                            onChange={(e) => handleItemChange(idx, e.target.value)}
+                            onChange={(itemId) => handleItemChange(idx, itemId)}
+                            items={itemsList}
+                            documentType="PURCHASE"
                             className="w-full p-2 bg-white border border-gray-300 rounded-lg text-xs font-semibold"
-                          >
-                            <option value="">-- Select Purchased Item --</option>
-                            {itemsList.map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.name} (Stock: {item.currentStock})
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </td>
                         <td className="p-2">
                           <input

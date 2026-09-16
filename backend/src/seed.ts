@@ -366,39 +366,86 @@ export async function seedDatabase() {
     create: { name: 'Agricultural Machines', description: 'Finished farm machinery' },
   });
 
-  // 6. Items / Products (20+ Items)
+  // 6. Items / Products (Organized across Categories)
   const itemsData = [
-    { sku: 'CC-01', name: 'Heavy Duty Chaff Cutter 2HP', type: 'FINISHED_MACHINE', hsnSac: '8436', gstRate: 18.0, purchasePrice: 22000, sellingPrice: 45000, currentStock: 15, unit: 'Nos' },
-    { sku: 'MM-400S', name: 'Milking Machine Double Bucket 400S', type: 'FINISHED_MACHINE', hsnSac: '8434', gstRate: 12.0, purchasePrice: 38000, sellingPrice: 65000, currentStock: 10, unit: 'Nos' },
-    { sku: 'MOT-2HP', name: 'Electric Motor 2HP Single Phase', type: 'COMPONENT', hsnSac: '8501', gstRate: 18.0, purchasePrice: 5800, sellingPrice: 8500, currentStock: 25, unit: 'Nos' },
-    { sku: 'BLD-01', name: 'High Carbon Chaff Blade Set (4 Pcs)', type: 'SPARE_PART', hsnSac: '8208', gstRate: 18.0, purchasePrice: 450, sellingPrice: 750, currentStock: 60, unit: 'Sets' },
-    { sku: 'SPR-16L', name: 'Battery Sprayer 16L Heavy Duty', type: 'FINISHED_MACHINE', hsnSac: '8424', gstRate: 12.0, purchasePrice: 2800, sellingPrice: 4500, currentStock: 20, unit: 'Nos' },
-    { sku: 'CAN-40L', name: 'Stainless Steel Milk Can 40L', type: 'EQUIPMENT', hsnSac: '7310', gstRate: 12.0, purchasePrice: 2400, sellingPrice: 3800, currentStock: 30, unit: 'Nos' },
-    { sku: 'TUP-SET', name: 'Teat Cup Assembly Set of 4', type: 'SPARE_PART', hsnSac: '8434', gstRate: 18.0, purchasePrice: 1500, sellingPrice: 2400, currentStock: 40, unit: 'Sets' },
-    { sku: 'LIN-RUB', name: 'Rubber Liner Set (4 Pcs)', type: 'SPARE_PART', hsnSac: '4016', gstRate: 18.0, purchasePrice: 480, sellingPrice: 850, currentStock: 50, unit: 'Sets' },
-    { sku: 'PMP-300', name: 'Oil Free Vacuum Pump 300L', type: 'COMPONENT', hsnSac: '8414', gstRate: 18.0, purchasePrice: 9500, sellingPrice: 14500, currentStock: 12, unit: 'Nos' },
-    { sku: 'CC-MINI', name: 'Mini Portable Chaff Cutter 1.5HP', type: 'FINISHED_MACHINE', hsnSac: '8436', gstRate: 12.0, purchasePrice: 16500, sellingPrice: 28000, currentStock: 8, unit: 'Nos' },
-    { sku: 'CUL-3TY', name: 'Tractor Cultivator 3 Tyne', type: 'FINISHED_MACHINE', hsnSac: '8432', gstRate: 12.0, purchasePrice: 14000, sellingPrice: 22000, currentStock: 6, unit: 'Nos' },
-    { sku: 'HAR-BLD', name: 'Combine Harvester Blade Heavy', type: 'SPARE_PART', hsnSac: '8208', gstRate: 18.0, purchasePrice: 320, sellingPrice: 580, currentStock: 45, unit: 'Nos' },
-    { sku: 'OIL-SEL', name: 'High Temperature Oil Seal Set', type: 'SPARE_PART', hsnSac: '8484', gstRate: 18.0, purchasePrice: 120, sellingPrice: 250, currentStock: 80, unit: 'Sets' },
-    { sku: 'BRG-6204', name: 'Heavy Duty Ball Bearing 6204', type: 'SPARE_PART', hsnSac: '8482', gstRate: 18.0, purchasePrice: 180, sellingPrice: 340, currentStock: 75, unit: 'Nos' },
-    { sku: 'VBLT-B42', name: 'Industrial V-Belt B42', type: 'SPARE_PART', hsnSac: '4010', gstRate: 18.0, purchasePrice: 220, sellingPrice: 420, currentStock: 55, unit: 'Nos' },
-    { sku: 'GAG-100', name: 'Vacuum Pressure Gauge 100 PSI', type: 'SPARE_PART', hsnSac: '9026', gstRate: 18.0, purchasePrice: 650, sellingPrice: 1200, currentStock: 25, unit: 'Nos' },
-    { sku: 'STR-SS', name: 'Stainless Steel Milk Strainer', type: 'EQUIPMENT', hsnSac: '7323', gstRate: 12.0, purchasePrice: 850, sellingPrice: 1450, currentStock: 35, unit: 'Nos' },
-    { sku: 'SLR-CHG', name: 'Solar Fence Charger 12V', type: 'FINISHED_MACHINE', hsnSac: '8543', gstRate: 12.0, purchasePrice: 6200, sellingPrice: 9800, currentStock: 14, unit: 'Nos' },
-    { sku: 'BRS-CUT', name: 'Petrol Brush Cutter 52cc', type: 'FINISHED_MACHINE', hsnSac: '8467', gstRate: 18.0, purchasePrice: 9800, sellingPrice: 16500, currentStock: 9, unit: 'Nos' },
-    { sku: 'OIL-4T', name: 'Agro Engine Oil 4T 1 Litre', type: 'SPARE_PART', hsnSac: '2710', gstRate: 18.0, purchasePrice: 280, sellingPrice: 480, currentStock: 90, unit: 'Cans' },
+    // 1. FINISHED / READY MACHINES
+    // Milking Machines
+    { sku: 'MM-400S', name: 'Milking Machine Double Bucket 400S', type: 'FINISHED_MACHINE', itemCategory: 'MILKING_MACHINE', categoryLabel: 'Milking Machines', subcategory: 'Double Bucket', hsnSac: '8434', gstRate: 12.0, purchasePrice: 38000, sellingPrice: 65000, currentStock: 10, unit: 'Nos', showInBilling: true, isSellable: true },
+    { sku: 'MM-1B', name: 'Milking Machine 1-Bucket Eco', type: 'FINISHED_MACHINE', itemCategory: 'MILKING_MACHINE', categoryLabel: 'Milking Machines', subcategory: 'Single Bucket', hsnSac: '8434', gstRate: 12.0, purchasePrice: 24000, sellingPrice: 42000, currentStock: 8, unit: 'Nos', showInBilling: true, isSellable: true },
+    { sku: 'MM-SOLAR-S', name: 'SAM Solar Milking Machine Single Bucket', type: 'FINISHED_MACHINE', itemCategory: 'MILKING_MACHINE', categoryLabel: 'Milking Machines', subcategory: 'Solar', hsnSac: '8434', gstRate: 12.0, purchasePrice: 32000, sellingPrice: 54000, currentStock: 6, unit: 'Nos', showInBilling: true, isSellable: true },
+    { sku: 'MM-SOLAR-D', name: 'SAM Solar Milking Machine Double Bucket', type: 'FINISHED_MACHINE', itemCategory: 'MILKING_MACHINE', categoryLabel: 'Milking Machines', subcategory: 'Solar', hsnSac: '8434', gstRate: 12.0, purchasePrice: 45000, sellingPrice: 78000, currentStock: 4, unit: 'Nos', showInBilling: true, isSellable: true },
+
+    // Chaff Cutters
+    { sku: 'CC-01', name: 'Heavy Duty Chaff Cutter 2HP', type: 'FINISHED_MACHINE', itemCategory: 'CHAFF_CUTTER', categoryLabel: 'Chaff Cutters', subcategory: '2HP Electric', hsnSac: '8436', gstRate: 18.0, purchasePrice: 22000, sellingPrice: 45000, currentStock: 15, unit: 'Nos', showInBilling: true, isSellable: true },
+    { sku: 'CC-03', name: 'Commercial Heavy Chaff Cutter 3HP', type: 'FINISHED_MACHINE', itemCategory: 'CHAFF_CUTTER', categoryLabel: 'Chaff Cutters', subcategory: '3HP Electric', hsnSac: '8436', gstRate: 18.0, purchasePrice: 29000, sellingPrice: 56000, currentStock: 7, unit: 'Nos', showInBilling: true, isSellable: true },
+    { sku: 'CC-MINI', name: 'Mini Portable Chaff Cutter 1.5HP', type: 'FINISHED_MACHINE', itemCategory: 'CHAFF_CUTTER', categoryLabel: 'Chaff Cutters', subcategory: '1.5HP Portable', hsnSac: '8436', gstRate: 12.0, purchasePrice: 16500, sellingPrice: 28000, currentStock: 8, unit: 'Nos', showInBilling: true, isSellable: true },
+
+    // Sprayers / Foggers
+    { sku: 'SPR-16L', name: 'Battery Sprayer 16L Heavy Duty', type: 'FINISHED_MACHINE', itemCategory: 'SPRAYER', categoryLabel: 'Sprayers / Foggers', subcategory: 'Battery Sprayer', hsnSac: '8424', gstRate: 12.0, purchasePrice: 2800, sellingPrice: 4500, currentStock: 20, unit: 'Nos', showInBilling: true, isSellable: true },
+    { sku: 'SPR-ELE', name: 'SAM Electrical Pressure Sprayer 25L', type: 'FINISHED_MACHINE', itemCategory: 'SPRAYER', categoryLabel: 'Sprayers / Foggers', subcategory: 'Electric Pressure', hsnSac: '8424', gstRate: 12.0, purchasePrice: 6500, sellingPrice: 11500, currentStock: 12, unit: 'Nos', showInBilling: true, isSellable: true },
+
+    // Pressure Washers
+    { sku: 'PW-2000', name: 'SAM High Pressure Washer 2000 PSI', type: 'FINISHED_MACHINE', itemCategory: 'PRESSURE_WASHER', categoryLabel: 'Pressure Washers', subcategory: 'High Pressure 2000PSI', hsnSac: '8424', gstRate: 18.0, purchasePrice: 11000, sellingPrice: 18500, currentStock: 9, unit: 'Nos', showInBilling: true, isSellable: true },
+
+    // Solar Machines
+    { sku: 'SLR-CHG', name: 'Solar Fence Charger 12V', type: 'FINISHED_MACHINE', itemCategory: 'SOLAR_MACHINE', categoryLabel: 'Solar Machines', subcategory: 'Solar Fence', hsnSac: '8543', gstRate: 12.0, purchasePrice: 6200, sellingPrice: 9800, currentStock: 14, unit: 'Nos', showInBilling: true, isSellable: true },
+
+    // Battery / Petrol Machines
+    { sku: 'BRS-CUT', name: 'Petrol Brush Cutter 52cc', type: 'FINISHED_MACHINE', itemCategory: 'BATTERY_PETROL_MACHINE', categoryLabel: 'Battery / Petrol Machines', subcategory: 'Petrol 52cc', hsnSac: '8467', gstRate: 18.0, purchasePrice: 9800, sellingPrice: 16500, currentStock: 9, unit: 'Nos', showInBilling: true, isSellable: true },
+
+    // Other Finished Machines
+    { sku: 'CUL-3TY', name: 'Tractor Cultivator 3 Tyne', type: 'FINISHED_MACHINE', itemCategory: 'FINISHED_MACHINE', categoryLabel: 'Ready / Finished Machines', subcategory: 'Tractor Attachment', hsnSac: '8432', gstRate: 12.0, purchasePrice: 14000, sellingPrice: 22000, currentStock: 6, unit: 'Nos', showInBilling: true, isSellable: true },
+
+    // 2. SPARE PARTS
+    { sku: 'BLD-01', name: 'High Carbon Chaff Blade Set (4 Pcs)', type: 'SPARE_PART', itemCategory: 'SPARE_PART', categoryLabel: 'Spare Parts', subcategory: 'Blade', hsnSac: '8208', gstRate: 18.0, purchasePrice: 450, sellingPrice: 750, currentStock: 60, unit: 'Sets', showInBilling: true, isSellable: true },
+    { sku: 'TUP-SET', name: 'Teat Cup Assembly Set of 4', type: 'SPARE_PART', itemCategory: 'SPARE_PART', categoryLabel: 'Spare Parts', subcategory: 'Teat Cup', hsnSac: '8434', gstRate: 18.0, purchasePrice: 1500, sellingPrice: 2400, currentStock: 40, unit: 'Sets', showInBilling: true, isSellable: true },
+    { sku: 'LIN-RUB', name: 'Rubber Liner Set (4 Pcs)', type: 'SPARE_PART', itemCategory: 'SPARE_PART', categoryLabel: 'Spare Parts', subcategory: 'Rubber Liner', hsnSac: '4016', gstRate: 18.0, purchasePrice: 480, sellingPrice: 850, currentStock: 50, unit: 'Sets', showInBilling: true, isSellable: true },
+    { sku: 'HAR-BLD', name: 'Combine Harvester Blade Heavy', type: 'SPARE_PART', itemCategory: 'SPARE_PART', categoryLabel: 'Spare Parts', subcategory: 'Blade', hsnSac: '8208', gstRate: 18.0, purchasePrice: 320, sellingPrice: 580, currentStock: 45, unit: 'Nos', showInBilling: true, isSellable: true },
+    { sku: 'OIL-SEL', name: 'High Temperature Oil Seal Set', type: 'SPARE_PART', itemCategory: 'SPARE_PART', categoryLabel: 'Spare Parts', subcategory: 'Oil Seal', hsnSac: '8484', gstRate: 18.0, purchasePrice: 120, sellingPrice: 250, currentStock: 80, unit: 'Sets', showInBilling: true, isSellable: true },
+    { sku: 'BRG-6204', name: 'Heavy Duty Ball Bearing 6204', type: 'SPARE_PART', itemCategory: 'SPARE_PART', categoryLabel: 'Spare Parts', subcategory: 'Bearing', hsnSac: '8482', gstRate: 18.0, purchasePrice: 180, sellingPrice: 340, currentStock: 75, unit: 'Nos', showInBilling: true, isSellable: true },
+    { sku: 'VBLT-B42', name: 'Industrial V-Belt B42', type: 'SPARE_PART', itemCategory: 'SPARE_PART', categoryLabel: 'Spare Parts', subcategory: 'V-Belt', hsnSac: '4010', gstRate: 18.0, purchasePrice: 220, sellingPrice: 420, currentStock: 55, unit: 'Nos', showInBilling: true, isSellable: true },
+    { sku: 'GAG-100', name: 'Vacuum Pressure Gauge 100 PSI', type: 'SPARE_PART', itemCategory: 'SPARE_PART', categoryLabel: 'Spare Parts', subcategory: 'Gauge', hsnSac: '9026', gstRate: 18.0, purchasePrice: 650, sellingPrice: 1200, currentStock: 25, unit: 'Nos', showInBilling: true, isSellable: true },
+    { sku: 'OIL-4T', name: 'Agro Engine Oil 4T 1 Litre', type: 'SPARE_PART', itemCategory: 'SPARE_PART', categoryLabel: 'Spare Parts', subcategory: 'Oil', hsnSac: '2710', gstRate: 18.0, purchasePrice: 280, sellingPrice: 480, currentStock: 90, unit: 'Cans', showInBilling: true, isSellable: true },
+
+    // 3. COMPONENTS (Internal Manufacturing & Assembly)
+    { sku: 'MOT-2HP', name: 'Electric Motor 2HP Single Phase', type: 'COMPONENT', itemCategory: 'COMPONENT', categoryLabel: 'Components', subcategory: 'Motor', hsnSac: '8501', gstRate: 18.0, purchasePrice: 5800, sellingPrice: 8500, currentStock: 25, unit: 'Nos', showInBilling: false, isSellable: false },
+    { sku: 'PMP-300', name: 'Oil Free Vacuum Pump 300L', type: 'COMPONENT', itemCategory: 'COMPONENT', categoryLabel: 'Components', subcategory: 'Vacuum Pump', hsnSac: '8414', gstRate: 18.0, purchasePrice: 9500, sellingPrice: 14500, currentStock: 12, unit: 'Nos', showInBilling: false, isSellable: false },
+
+    // 4. RAW MATERIALS (Internal Hardware / Steel / Fasteners)
+    { sku: 'RM-BOLT-M8', name: 'Hex Bolt M8 x 40mm (High Tensile)', type: 'RAW_MATERIAL', itemCategory: 'RAW_MATERIAL', categoryLabel: 'Raw Materials', subcategory: 'Fasteners', hsnSac: '7318', gstRate: 18.0, purchasePrice: 8, sellingPrice: 15, currentStock: 500, unit: 'Pcs', showInBilling: false, isSellable: false },
+    { sku: 'RM-NUT-M8', name: 'Hex Nut M8 Galvanized', type: 'RAW_MATERIAL', itemCategory: 'RAW_MATERIAL', categoryLabel: 'Raw Materials', subcategory: 'Fasteners', hsnSac: '7318', gstRate: 18.0, purchasePrice: 3, sellingPrice: 6, currentStock: 800, unit: 'Pcs', showInBilling: false, isSellable: false },
+    { sku: 'RM-ANG-MS', name: 'MS Angle 50x50x5mm Heavy (6m Bar)', type: 'RAW_MATERIAL', itemCategory: 'RAW_MATERIAL', categoryLabel: 'Raw Materials', subcategory: 'Steel Bar', hsnSac: '7216', gstRate: 18.0, purchasePrice: 1200, sellingPrice: 1800, currentStock: 45, unit: 'Bars', showInBilling: false, isSellable: false },
+
+    // 5. OTHER / MISCELLANEOUS
+    { sku: 'CAN-40L', name: 'Stainless Steel Milk Can 40L', type: 'EQUIPMENT', itemCategory: 'OTHER', categoryLabel: 'Other / Miscellaneous', subcategory: 'Milk Container', hsnSac: '7310', gstRate: 12.0, purchasePrice: 2400, sellingPrice: 3800, currentStock: 30, unit: 'Nos', showInBilling: true, isSellable: true },
+    { sku: 'STR-SS', name: 'Stainless Steel Milk Strainer', type: 'EQUIPMENT', itemCategory: 'OTHER', categoryLabel: 'Other / Miscellaneous', subcategory: 'Dairy Tool', hsnSac: '7323', gstRate: 12.0, purchasePrice: 850, sellingPrice: 1450, currentStock: 35, unit: 'Nos', showInBilling: true, isSellable: true },
   ];
 
   const dbItems: any[] = [];
   for (const itemDef of itemsData) {
     const item = await prisma.item.upsert({
       where: { sku: itemDef.sku },
-      update: {},
+      update: {
+        itemCategory: itemDef.itemCategory,
+        categoryLabel: itemDef.categoryLabel,
+        subcategory: itemDef.subcategory,
+        showInBilling: itemDef.showInBilling,
+        isSellable: itemDef.isSellable,
+      },
       create: {
         name: itemDef.name,
         sku: itemDef.sku,
         type: itemDef.type,
+        itemCategory: itemDef.itemCategory,
+        categoryLabel: itemDef.categoryLabel,
+        subcategory: itemDef.subcategory,
+        showInBilling: itemDef.showInBilling,
+        isSellable: itemDef.isSellable,
+        allowSales: itemDef.showInBilling,
+        allowQuotation: itemDef.showInBilling,
+        allowPurchase: true,
+        allowDC: true,
+        allowService: true,
         categoryId: catMachines.id,
         unit: itemDef.unit,
         hsnSac: itemDef.hsnSac,
@@ -410,6 +457,67 @@ export async function seedDatabase() {
       },
     });
     dbItems.push(item);
+  }
+
+  // Ensure any existing non-seeded items in DB are cleanly categorized
+  const unclassifiedItems = await prisma.item.findMany({ where: { itemCategory: 'OTHER' } });
+  for (const item of unclassifiedItems) {
+    const name = item.name || '';
+    let category = item.type === 'SPARE_PART' ? 'SPARE_PART' : item.type === 'COMPONENT' ? 'COMPONENT' : item.type === 'RAW_MATERIAL' ? 'RAW_MATERIAL' : 'OTHER';
+    let label = 'Other / Miscellaneous';
+    let showInBilling = item.type !== 'RAW_MATERIAL' && item.type !== 'COMPONENT';
+
+    if (name.toLowerCase().includes('milking')) {
+      category = 'MILKING_MACHINE';
+      label = 'Milking Machines';
+      showInBilling = true;
+    } else if (name.toLowerCase().includes('chaff')) {
+      category = 'CHAFF_CUTTER';
+      label = 'Chaff Cutters';
+      showInBilling = true;
+    } else if (name.toLowerCase().includes('sprayer') || name.toLowerCase().includes('fogger')) {
+      category = 'SPRAYER';
+      label = 'Sprayers / Foggers';
+      showInBilling = true;
+    } else if (name.toLowerCase().includes('washer') || name.toLowerCase().includes('pressure')) {
+      category = 'PRESSURE_WASHER';
+      label = 'Pressure Washers';
+      showInBilling = true;
+    } else if (name.toLowerCase().includes('solar')) {
+      category = 'SOLAR_MACHINE';
+      label = 'Solar Machines';
+      showInBilling = true;
+    } else if (name.toLowerCase().includes('brush') || name.toLowerCase().includes('auger') || name.toLowerCase().includes('petrol')) {
+      category = 'BATTERY_PETROL_MACHINE';
+      label = 'Battery / Petrol Machines';
+      showInBilling = true;
+    } else if (item.type === 'SPARE_PART' || name.toLowerCase().includes('blade') || name.toLowerCase().includes('bearing') || name.toLowerCase().includes('belt')) {
+      category = 'SPARE_PART';
+      label = 'Spare Parts';
+      showInBilling = true;
+    } else if (item.type === 'COMPONENT' || name.toLowerCase().includes('motor') || name.toLowerCase().includes('pump')) {
+      category = 'COMPONENT';
+      label = 'Components';
+      showInBilling = false;
+    } else if (item.type === 'RAW_MATERIAL' || name.toLowerCase().includes('bolt') || name.toLowerCase().includes('nut') || name.toLowerCase().includes('angle')) {
+      category = 'RAW_MATERIAL';
+      label = 'Raw Materials';
+      showInBilling = false;
+    } else if (item.type === 'FINISHED_MACHINE') {
+      category = 'FINISHED_MACHINE';
+      label = 'Ready / Finished Machines';
+      showInBilling = true;
+    }
+
+    await prisma.item.update({
+      where: { id: item.id },
+      data: {
+        itemCategory: category,
+        categoryLabel: label,
+        showInBilling,
+        isSellable: showInBilling,
+      },
+    });
   }
 
   // 7. Parties (10 Customers + 10 Suppliers across KA, MH, TN)

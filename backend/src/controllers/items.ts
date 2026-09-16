@@ -4,11 +4,20 @@ import { AuthRequest } from '../middleware/auth';
 
 export async function getItems(req: AuthRequest, res: Response) {
   try {
-    const { type, search, categoryId } = req.query;
+    const { type, search, categoryId, itemCategory, documentType, billingOnly } = req.query;
     const where: any = {};
 
     if (type) where.type = type as string;
     if (categoryId) where.categoryId = categoryId as string;
+    if (itemCategory) where.itemCategory = itemCategory as string;
+
+    const isCustomerBilling = documentType === 'SALES' || documentType === 'QUOTATION' || billingOnly === 'true';
+
+    // If searching for customer billing documents and NO search term is passed,
+    // restrict to billing visible / sellable items by default
+    if (isCustomerBilling && !search) {
+      where.showInBilling = true;
+    }
 
     if (search) {
       const q = String(search).trim();
@@ -16,11 +25,14 @@ export async function getItems(req: AuthRequest, res: Response) {
         { name: { contains: q } },
         { sku: { contains: q } },
         { hsnSac: { contains: q } },
+        { itemCategory: { contains: q } },
+        { categoryLabel: { contains: q } },
+        { subcategory: { contains: q } },
         { description: { contains: q } },
       ];
     }
 
-    const items = await prisma.item.findMany({
+    let items = await prisma.item.findMany({
       where,
       include: {
         category: true,
@@ -29,6 +41,30 @@ export async function getItems(req: AuthRequest, res: Response) {
       },
       orderBy: { name: 'asc' },
     });
+
+    // Custom sorting for billing: Machines first, Spare Parts second, Components/Raw Materials last
+    if (isCustomerBilling || documentType) {
+      const categoryPriority: Record<string, number> = {
+        MILKING_MACHINE: 1,
+        CHAFF_CUTTER: 2,
+        SPRAYER: 3,
+        PRESSURE_WASHER: 4,
+        SOLAR_MACHINE: 5,
+        BATTERY_PETROL_MACHINE: 6,
+        FINISHED_MACHINE: 7,
+        SPARE_PART: 8,
+        OTHER: 9,
+        COMPONENT: 10,
+        RAW_MATERIAL: 11,
+      };
+
+      items = items.sort((a, b) => {
+        const prioA = categoryPriority[a.itemCategory] || (a.type === 'FINISHED_MACHINE' ? 7 : a.type === 'SPARE_PART' ? 8 : 10);
+        const prioB = categoryPriority[b.itemCategory] || (b.type === 'FINISHED_MACHINE' ? 7 : b.type === 'SPARE_PART' ? 8 : 10);
+        if (prioA !== prioB) return prioA - prioB;
+        return a.name.localeCompare(b.name);
+      });
+    }
 
     return res.json({ items });
   } catch (err: any) {
@@ -62,6 +98,16 @@ export async function createItem(req: AuthRequest, res: Response) {
       name,
       sku,
       type,
+      itemCategory,
+      categoryLabel,
+      subcategory,
+      showInBilling,
+      isSellable,
+      allowSales,
+      allowQuotation,
+      allowPurchase,
+      allowDC,
+      allowService,
       categoryId,
       unit,
       hsnSac,
@@ -91,6 +137,16 @@ export async function createItem(req: AuthRequest, res: Response) {
         name,
         sku: sku.trim(),
         type: type || 'FINISHED_MACHINE',
+        itemCategory: itemCategory || 'OTHER',
+        categoryLabel: categoryLabel || 'Other / Miscellaneous',
+        subcategory: subcategory || null,
+        showInBilling: showInBilling !== undefined ? Boolean(showInBilling) : true,
+        isSellable: isSellable !== undefined ? Boolean(isSellable) : true,
+        allowSales: allowSales !== undefined ? Boolean(allowSales) : true,
+        allowQuotation: allowQuotation !== undefined ? Boolean(allowQuotation) : true,
+        allowPurchase: allowPurchase !== undefined ? Boolean(allowPurchase) : true,
+        allowDC: allowDC !== undefined ? Boolean(allowDC) : true,
+        allowService: allowService !== undefined ? Boolean(allowService) : true,
         categoryId: categoryId || null,
         unit: unit || 'Nos',
         hsnSac: hsnSac || '8436',
@@ -134,6 +190,8 @@ export async function updateItem(req: AuthRequest, res: Response) {
     if (data.sellingPrice !== undefined) data.sellingPrice = Number(data.sellingPrice);
     if (data.wholesalePrice !== undefined) data.wholesalePrice = Number(data.wholesalePrice);
     if (data.minStock !== undefined) data.minStock = Number(data.minStock);
+    if (data.showInBilling !== undefined) data.showInBilling = Boolean(data.showInBilling);
+    if (data.isSellable !== undefined) data.isSellable = Boolean(data.isSellable);
 
     delete data.currentStock; // Prevent direct stock edit without adjustment record
 
