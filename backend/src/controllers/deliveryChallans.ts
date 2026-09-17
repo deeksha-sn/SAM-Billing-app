@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../db';
 import { AuthRequest } from '../middleware/auth';
 import { generateDocumentNumber } from '../utils/numbering';
+import { resolveTemplateSnapshot } from './templates';
 
 export async function getDeliveryChallans(req: AuthRequest, res: Response) {
   try {
@@ -55,11 +56,15 @@ export async function createDeliveryChallan(req: AuthRequest, res: Response) {
       poDate,
       items,
       notes,
+      billTemplateId,
+      fieldsConfigSnapshot,
     } = req.body;
 
     if (!partyId || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Customer and items are required for Delivery Challan' });
     }
+
+    const templateInfo = await resolveTemplateSnapshot('DELIVERY_CHALLAN', billTemplateId, fieldsConfigSnapshot);
 
     const party = await prisma.party.findUnique({ where: { id: partyId } });
     if (!party) return res.status(404).json({ error: 'Customer not found' });
@@ -95,6 +100,8 @@ export async function createDeliveryChallan(req: AuthRequest, res: Response) {
           stockDeducted: affectsStock,
           status: 'CONFIRMED',
           notes: notes || null,
+          billTemplateId: templateInfo.billTemplateId,
+          fieldsConfigSnapshot: templateInfo.fieldsConfigSnapshot,
           items: {
             create: items.map((i: any) => ({
               itemId: i.itemId,
@@ -172,6 +179,8 @@ export async function updateDeliveryChallan(req: AuthRequest, res: Response) {
       poDate,
       items,
       notes,
+      billTemplateId,
+      fieldsConfigSnapshot,
     } = req.body;
 
     const existing = await prisma.deliveryChallan.findUnique({
@@ -275,6 +284,12 @@ export async function updateDeliveryChallan(req: AuthRequest, res: Response) {
           affectsStock: affectsStock,
           stockDeducted: affectsStock,
           notes: notes !== undefined ? notes : existing.notes,
+          billTemplateId: billTemplateId !== undefined || fieldsConfigSnapshot !== undefined
+            ? (await resolveTemplateSnapshot('DELIVERY_CHALLAN', billTemplateId, fieldsConfigSnapshot)).billTemplateId
+            : existing.billTemplateId,
+          fieldsConfigSnapshot: billTemplateId !== undefined || fieldsConfigSnapshot !== undefined
+            ? (await resolveTemplateSnapshot('DELIVERY_CHALLAN', billTemplateId, fieldsConfigSnapshot)).fieldsConfigSnapshot
+            : existing.fieldsConfigSnapshot,
           items: processedItems
             ? {
                 create: processedItems,

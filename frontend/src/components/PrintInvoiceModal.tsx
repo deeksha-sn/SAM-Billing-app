@@ -36,8 +36,19 @@ function numberToWords(num: number): string {
 export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, company, onClose }) => {
   if (!invoice || !company) return null;
 
-  const [fieldConfig, setFieldConfig] = useState<BillFieldsConfig>(DEFAULT_INVOICE_FIELDS);
-  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const [fieldConfig, setFieldConfig] = useState<BillFieldsConfig>(() => {
+    if (invoice?.fieldsConfigSnapshot) {
+      try {
+        return typeof invoice.fieldsConfigSnapshot === 'string'
+          ? JSON.parse(invoice.fieldsConfigSnapshot)
+          : invoice.fieldsConfigSnapshot;
+      } catch (err) {
+        console.error('Failed to parse invoice fieldsConfigSnapshot:', err);
+      }
+    }
+    return DEFAULT_INVOICE_FIELDS;
+  });
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(invoice?.billTemplateId || null);
 
   const party = invoice.party || {};
   const isInter = invoice.isInterState;

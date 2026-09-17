@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import { generateDocumentNumber } from '../utils/numbering';
 import { calculateItemGst, isInterStateTransaction } from '../utils/gstHelper';
 import { applyInvoiceStockDeduction } from './sales';
+import { resolveTemplateSnapshot } from './templates';
 
 export async function getQuotations(req: AuthRequest, res: Response) {
   try {
@@ -65,6 +66,8 @@ export async function createQuotation(req: AuthRequest, res: Response) {
       termsSnapshot,
       status,
       placeOfSupply,
+      billTemplateId,
+      fieldsConfigSnapshot,
     } = req.body;
 
     if (!partyId) {
@@ -74,6 +77,8 @@ export async function createQuotation(req: AuthRequest, res: Response) {
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'At least one item is required' });
     }
+
+    const templateInfo = await resolveTemplateSnapshot('QUOTATION', billTemplateId, fieldsConfigSnapshot);
 
     const party = await prisma.party.findUnique({ where: { id: partyId } });
     if (!party) return res.status(404).json({ error: 'Customer not found' });
@@ -177,6 +182,8 @@ export async function createQuotation(req: AuthRequest, res: Response) {
           grandTotal: grandTotal,
           paymentTerms: paymentTerms || null,
           terms: formattedTermsSnapshot,
+          billTemplateId: templateInfo.billTemplateId,
+          fieldsConfigSnapshot: templateInfo.fieldsConfigSnapshot,
           notes: notes || null,
           status: status || 'ACTIVE',
           items: {
@@ -223,6 +230,8 @@ export async function updateQuotation(req: AuthRequest, res: Response) {
       notes,
       status,
       placeOfSupply,
+      billTemplateId,
+      fieldsConfigSnapshot,
     } = req.body;
 
     const existing = await prisma.quotation.findUnique({ where: { id }, include: { items: true } });
@@ -345,6 +354,12 @@ export async function updateQuotation(req: AuthRequest, res: Response) {
           grandTotal: grandTotal,
           notes: notes !== undefined ? notes : existing.notes,
           status: status || existing.status,
+          billTemplateId: billTemplateId !== undefined || fieldsConfigSnapshot !== undefined
+            ? (await resolveTemplateSnapshot('QUOTATION', billTemplateId, fieldsConfigSnapshot)).billTemplateId
+            : existing.billTemplateId,
+          fieldsConfigSnapshot: billTemplateId !== undefined || fieldsConfigSnapshot !== undefined
+            ? (await resolveTemplateSnapshot('QUOTATION', billTemplateId, fieldsConfigSnapshot)).fieldsConfigSnapshot
+            : existing.fieldsConfigSnapshot,
           items: processedItems
             ? {
                 create: processedItems,

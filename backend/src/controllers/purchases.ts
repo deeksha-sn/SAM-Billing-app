@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import { AuthRequest } from '../middleware/auth';
 import { generateDocumentNumber } from '../utils/numbering';
 import { calculateItemGst, isInterStateTransaction } from '../utils/gstHelper';
+import { resolveTemplateSnapshot } from './templates';
 
 export async function getPurchases(req: AuthRequest, res: Response) {
   try {
@@ -65,11 +66,15 @@ export async function createPurchase(req: AuthRequest, res: Response) {
       transportName,
       deliveryLocation,
       roundOffEnabled,
+      billTemplateId,
+      fieldsConfigSnapshot,
     } = req.body;
 
     if (!partyId || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Supplier and purchase line items are required' });
     }
+
+    const templateInfo = await resolveTemplateSnapshot('PURCHASE', billTemplateId, fieldsConfigSnapshot);
 
     const supplier = await prisma.party.findUnique({ where: { id: partyId } });
     if (!supplier) return res.status(404).json({ error: 'Supplier not found' });
@@ -175,6 +180,8 @@ export async function createPurchase(req: AuthRequest, res: Response) {
           dueDate: dueDate ? new Date(dueDate) : null,
           status: purchaseStatus,
           notes: notes || null,
+          billTemplateId: templateInfo.billTemplateId,
+          fieldsConfigSnapshot: templateInfo.fieldsConfigSnapshot,
           items: {
             create: processedItems,
           },
@@ -263,6 +270,8 @@ export async function updatePurchase(req: AuthRequest, res: Response) {
       items,
       amountPaid,
       notes,
+      billTemplateId,
+      fieldsConfigSnapshot,
     } = req.body;
 
     const existing = await prisma.purchaseInvoice.findUnique({
@@ -423,6 +432,12 @@ export async function updatePurchase(req: AuthRequest, res: Response) {
           amountPaid: amountPaid !== undefined ? Number(amountPaid) : existing.amountPaid,
           balanceDue: balanceDue,
           notes: notes !== undefined ? notes : existing.notes,
+          billTemplateId: billTemplateId !== undefined || fieldsConfigSnapshot !== undefined
+            ? (await resolveTemplateSnapshot('PURCHASE', billTemplateId, fieldsConfigSnapshot)).billTemplateId
+            : existing.billTemplateId,
+          fieldsConfigSnapshot: billTemplateId !== undefined || fieldsConfigSnapshot !== undefined
+            ? (await resolveTemplateSnapshot('PURCHASE', billTemplateId, fieldsConfigSnapshot)).fieldsConfigSnapshot
+            : existing.fieldsConfigSnapshot,
           items: processedItems
             ? {
                 create: processedItems,

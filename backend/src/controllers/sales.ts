@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import { AuthRequest } from '../middleware/auth';
 import { generateDocumentNumber } from '../utils/numbering';
 import { calculateItemGst, isInterStateTransaction } from '../utils/gstHelper';
+import { resolveTemplateSnapshot } from './templates';
 
 // Helper function to process BOM & Stock Deduction in a transaction
 export async function applyInvoiceStockDeduction(tx: any, invoiceId: string, invoiceNumber: string, partyId: string, userId?: string) {
@@ -236,11 +237,15 @@ export async function createInvoice(req: AuthRequest, res: Response) {
       roundOffEnabled,
       termsTemplateId,
       termsSnapshot,
+      billTemplateId,
+      fieldsConfigSnapshot,
     } = req.body;
 
     if (!partyId || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Customer and invoice line items are required' });
     }
+
+    const templateInfo = await resolveTemplateSnapshot('INVOICE', billTemplateId, fieldsConfigSnapshot);
 
     const party = await prisma.party.findUnique({ where: { id: partyId } });
     if (!party) return res.status(404).json({ error: 'Customer not found' });
@@ -357,6 +362,8 @@ export async function createInvoice(req: AuthRequest, res: Response) {
               transportName: transportName ? String(transportName).trim() : null,
               termsTemplateId: termsTemplateId || null,
               termsSnapshot: formattedTermsSnapshot,
+              billTemplateId: templateInfo.billTemplateId,
+              fieldsConfigSnapshot: templateInfo.fieldsConfigSnapshot,
               taxableAmount: totalTaxable,
               cgstAmount: totalCgst,
               sgstAmount: totalSgst,
@@ -510,6 +517,8 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
       poDate,
       termsTemplateId,
       termsSnapshot,
+      billTemplateId,
+      fieldsConfigSnapshot,
     } = req.body;
 
     const invoice = await prisma.invoice.findUnique({ where: { id }, include: { party: true, items: true } });
@@ -658,6 +667,12 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
           poDate: poDate !== undefined ? (poDate ? new Date(poDate) : null) : invoice.poDate,
           termsTemplateId: termsTemplateId !== undefined ? (termsTemplateId ? String(termsTemplateId) : null) : invoice.termsTemplateId,
           termsSnapshot: formattedTermsSnapshot,
+          billTemplateId: billTemplateId !== undefined || fieldsConfigSnapshot !== undefined
+            ? (await resolveTemplateSnapshot('INVOICE', billTemplateId, fieldsConfigSnapshot)).billTemplateId
+            : invoice.billTemplateId,
+          fieldsConfigSnapshot: billTemplateId !== undefined || fieldsConfigSnapshot !== undefined
+            ? (await resolveTemplateSnapshot('INVOICE', billTemplateId, fieldsConfigSnapshot)).fieldsConfigSnapshot
+            : invoice.fieldsConfigSnapshot,
           items: processedItems
             ? {
                 create: processedItems.map(({ serialNumber, ...rest }) => rest),

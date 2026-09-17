@@ -12,8 +12,19 @@ interface PrintChallanModalProps {
 }
 
 export const PrintChallanModal: React.FC<PrintChallanModalProps> = ({ challan, company, onClose }) => {
-  const [fieldConfig, setFieldConfig] = useState<BillFieldsConfig>(DEFAULT_CHALLAN_FIELDS);
-  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const [fieldConfig, setFieldConfig] = useState<BillFieldsConfig>(() => {
+    if (challan?.fieldsConfigSnapshot) {
+      try {
+        return typeof challan.fieldsConfigSnapshot === 'string'
+          ? JSON.parse(challan.fieldsConfigSnapshot)
+          : challan.fieldsConfigSnapshot;
+      } catch (err) {
+        console.error('Failed to parse challan fieldsConfigSnapshot:', err);
+      }
+    }
+    return DEFAULT_CHALLAN_FIELDS;
+  });
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(challan?.billTemplateId || null);
 
   if (!challan || !company) return null;
 

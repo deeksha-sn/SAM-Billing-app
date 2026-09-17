@@ -34,8 +34,19 @@ function numberToWords(num: number): string {
 }
 
 export const PrintQuotationModal: React.FC<PrintQuotationModalProps> = ({ quotation, company, onClose }) => {
-  const [fieldConfig, setFieldConfig] = useState<BillFieldsConfig>(DEFAULT_QUOTATION_FIELDS);
-  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const [fieldConfig, setFieldConfig] = useState<BillFieldsConfig>(() => {
+    if (quotation?.fieldsConfigSnapshot) {
+      try {
+        return typeof quotation.fieldsConfigSnapshot === 'string'
+          ? JSON.parse(quotation.fieldsConfigSnapshot)
+          : quotation.fieldsConfigSnapshot;
+      } catch (err) {
+        console.error('Failed to parse quotation fieldsConfigSnapshot:', err);
+      }
+    }
+    return DEFAULT_QUOTATION_FIELDS;
+  });
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(quotation?.billTemplateId || null);
 
   if (!quotation || !company) return null;
 

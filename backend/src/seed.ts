@@ -149,13 +149,12 @@ export async function ensureRelativeServiceReminders(db: PrismaClient = prisma) 
 }
 
 export async function seedDefaultBillTemplates(db: PrismaClient = prisma) {
-  const count = await db.billTemplate.count();
-  if (count > 0) return;
-
-  console.log('Seeding persistent default bill templates...');
+  console.log('Ensuring persistent ready-made bill templates exist...');
 
   const {
     DEFAULT_INVOICE_FIELDS,
+    DETAILED_MACHINERY_FIELDS,
+    SIMPLE_INVOICE_FIELDS,
     DEFAULT_QUOTATION_FIELDS,
     DEFAULT_CHALLAN_FIELDS,
     DEFAULT_PURCHASE_FIELDS,
@@ -163,13 +162,18 @@ export async function seedDefaultBillTemplates(db: PrismaClient = prisma) {
 
   const templates = [
     { name: 'Standard Tax Invoice', documentType: 'INVOICE', isDefault: true, fieldsConfig: JSON.stringify(DEFAULT_INVOICE_FIELDS) },
+    { name: 'Detailed Machinery Invoice', documentType: 'INVOICE', isDefault: false, fieldsConfig: JSON.stringify(DETAILED_MACHINERY_FIELDS) },
+    { name: 'Simple Invoice', documentType: 'INVOICE', isDefault: false, fieldsConfig: JSON.stringify(SIMPLE_INVOICE_FIELDS) },
     { name: 'Standard Quotation', documentType: 'QUOTATION', isDefault: true, fieldsConfig: JSON.stringify(DEFAULT_QUOTATION_FIELDS) },
     { name: 'Standard Delivery Challan', documentType: 'DELIVERY_CHALLAN', isDefault: true, fieldsConfig: JSON.stringify(DEFAULT_CHALLAN_FIELDS) },
     { name: 'Standard Purchase Invoice', documentType: 'PURCHASE', isDefault: true, fieldsConfig: JSON.stringify(DEFAULT_PURCHASE_FIELDS) },
   ];
 
   for (const t of templates) {
-    await db.billTemplate.create({ data: t });
+    const existing = await db.billTemplate.findFirst({ where: { name: t.name, documentType: t.documentType } });
+    if (!existing) {
+      await db.billTemplate.create({ data: t });
+    }
   }
 }
 

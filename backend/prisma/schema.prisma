@@ -247,6 +247,8 @@ model Invoice {
   transportName     String?
   termsTemplateId   String?
   termsSnapshot     String?   // JSON string storing array of terms e.g. ["1. Company...", "2. No..."]
+  billTemplateId    String?
+  fieldsConfigSnapshot String? // JSON string storing snapshot of BillFieldsConfig at creation time
   taxableAmount     Float     @default(0)
   cgstAmount        Float     @default(0)
   sgstAmount        Float     @default(0)
@@ -315,6 +317,8 @@ model Quotation {
   isInterState      Boolean   @default(false)
   transportName     String?
   deliveryLocation  String?
+  billTemplateId    String?
+  fieldsConfigSnapshot String? // JSON string storing snapshot of BillFieldsConfig
   taxableAmount     Float     @default(0)
   cgstAmount        Float     @default(0)
   sgstAmount        Float     @default(0)
@@ -425,6 +429,8 @@ model DeliveryChallan {
   status           String   @default("CONFIRMED") // CONFIRMED, CONVERTED_TO_INVOICE, CANCELLED
   notes            String?
   invoiceId        String?
+  billTemplateId   String?
+  fieldsConfigSnapshot String? // JSON string storing snapshot of BillFieldsConfig
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -466,6 +472,8 @@ model PurchaseInvoice {
   poNumber           String?
   poDate             DateTime?
   transportName      String?
+  billTemplateId     String?
+  fieldsConfigSnapshot String? // JSON string storing snapshot of BillFieldsConfig
   taxableAmount      Float     @default(0)
   cgstAmount         Float     @default(0)
   sgstAmount         Float     @default(0)

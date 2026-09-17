@@ -48,7 +48,6 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
   // Master Data
   const [parties, setParties] = useState<any[]>([]);
   const [dbItems, setDbItems] = useState<any[]>([]);
-  const [termsTemplates, setTermsTemplates] = useState<any[]>([]);
 
   // Form State
   const [invoiceNumberInput, setInvoiceNumberInput] = useState(invoice?.invoiceNumber || '');
@@ -96,27 +95,28 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
         ]
   );
 
-  // Terms & Conditions
-  const [selectedTermsTemplateId, setSelectedTermsTemplateId] = useState(
-    invoice?.termsTemplateId || ''
-  );
+  // Terms & Bill Templates
+  const [termsTemplates, setTermsTemplates] = useState<any[]>([]);
+  const [selectedTermsTemplateId, setSelectedTermsTemplateId] = useState<string>(invoice?.termsTemplateId || '');
+  const [billTemplates, setBillTemplates] = useState<any[]>([]);
+  const [selectedBillTemplateId, setSelectedBillTemplateId] = useState<string>(invoice?.billTemplateId || '');
   const [termsList, setTermsList] = useState<string[]>(() => {
     if (invoice?.termsSnapshot) {
       try {
         if (typeof invoice.termsSnapshot === 'string' && invoice.termsSnapshot.startsWith('[')) {
           return JSON.parse(invoice.termsSnapshot);
-        } else if (Array.isArray(invoice.termsSnapshot)) {
-          return invoice.termsSnapshot;
         }
+        if (Array.isArray(invoice.termsSnapshot)) return invoice.termsSnapshot;
+        return [invoice.termsSnapshot];
       } catch {
-        // Fallback
+        return [String(invoice.termsSnapshot)];
       }
     }
     return [
-      '1. Company is not responsible for transportation damages.',
-      '2. No replacement, No onsite service, No exchange.',
-      '3. Extra charge applicable for spare parts.',
-      '4. Goods once sold cannot be taken back under any conditions.',
+      '1. Goods once sold will not be taken back.',
+      '2. Subject to Karnataka Jurisdiction.',
+      '3. Warranty as per manufacturer terms.',
+      '4. Interest @ 18% p.a. charged on delayed payments.',
       '5. Subject to Bangalore Jurisdiction only.',
       '6. Thanks for doing business with us!',
     ];
@@ -136,14 +136,21 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
 
   const loadMasterData = async () => {
     try {
-      const [partiesRes, itemsRes, termsRes] = await Promise.all([
+      const [partiesRes, itemsRes, termsRes, billRes] = await Promise.all([
         apiRequest('/parties?type=CUSTOMER'),
         apiRequest('/items'),
         apiRequest('/terms/templates'),
+        apiRequest('/templates?documentType=INVOICE'),
       ]);
       setParties(partiesRes.parties || []);
       setDbItems(itemsRes.items || []);
       setTermsTemplates(termsRes.templates || []);
+      setBillTemplates(billRes.templates || []);
+
+      if (!selectedBillTemplateId && billRes.templates && billRes.templates.length > 0) {
+        const def = billRes.templates.find((t: any) => t.isDefault) || billRes.templates[0];
+        if (def) setSelectedBillTemplateId(def.id);
+      }
 
       // If no template selected yet, load default
       if (!selectedTermsTemplateId && termsRes.templates && termsRes.templates.length > 0) {
@@ -358,6 +365,7 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
 
     setIsSubmitting(true);
     try {
+      const selBillTpl = billTemplates.find((t) => t.id === selectedBillTemplateId);
       const payload = {
         invoiceNumber: invoiceNumberInput.trim() || undefined,
         partyId: selectedPartyId,
@@ -369,6 +377,8 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
         poDate: poDate || null,
         termsTemplateId: selectedTermsTemplateId || null,
         termsSnapshot: termsList,
+        billTemplateId: selectedBillTemplateId || null,
+        fieldsConfigSnapshot: selBillTpl ? selBillTpl.fieldsConfig : undefined,
         paymentMode,
         amountPaid: Number(amountPaid) || 0,
         status: targetStatus,
@@ -756,7 +766,22 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block font-bold text-slate-700 uppercase text-[10px] mb-1">Print / Document Template</label>
+                <select
+                  value={selectedBillTemplateId}
+                  onChange={(e) => setSelectedBillTemplateId(e.target.value)}
+                  className="w-full p-2.5 border rounded-xl font-semibold text-slate-900 bg-white"
+                >
+                  {billTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} {t.isDefault ? '(Default)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block font-bold text-slate-700 uppercase text-[10px] mb-1">Select Terms Template</label>
                 <select

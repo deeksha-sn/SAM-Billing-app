@@ -48,9 +48,11 @@ export const QuotationEditorModal: React.FC<QuotationEditorModalProps> = ({
   const [availableItems, setAvailableItems] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
 
-  // Terms & Conditions Master State
+  // Terms & Bill Templates
   const [termsTemplates, setTermsTemplates] = useState<any[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [billTemplates, setBillTemplates] = useState<any[]>([]);
+  const [selectedBillTemplateId, setSelectedBillTemplateId] = useState<string>(quotation?.billTemplateId || '');
   const [termsList, setTermsList] = useState<string[]>([]);
   const [newTemplateName, setNewTemplateName] = useState('');
   const [showSaveTemplateInput, setShowSaveTemplateInput] = useState(false);
@@ -72,14 +74,22 @@ export const QuotationEditorModal: React.FC<QuotationEditorModalProps> = ({
 
   const loadMasterData = async () => {
     try {
-      const pRes = await apiRequest('/parties?type=CUSTOMER');
+      const [pRes, iRes, tRes, bRes] = await Promise.all([
+        apiRequest('/parties?type=CUSTOMER'),
+        apiRequest('/items'),
+        apiRequest('/terms/templates'),
+        apiRequest('/templates?documentType=QUOTATION'),
+      ]);
+
       setParties(pRes.parties || []);
-
-      const iRes = await apiRequest('/items');
       setAvailableItems(iRes.items || []);
-
-      const tRes = await apiRequest('/terms/templates');
       setTermsTemplates(tRes.templates || []);
+      setBillTemplates(bRes.templates || []);
+
+      if (!selectedBillTemplateId && bRes.templates && bRes.templates.length > 0) {
+        const def = bRes.templates.find((t: any) => t.isDefault) || bRes.templates[0];
+        if (def) setSelectedBillTemplateId(def.id);
+      }
 
       // If creating new quotation, auto-populate numbering preview if needed
       if (!isEditing) {
@@ -322,6 +332,7 @@ export const QuotationEditorModal: React.FC<QuotationEditorModalProps> = ({
 
     setSaving(true);
     try {
+      const selBillTpl = billTemplates.find((t) => t.id === selectedBillTemplateId);
       const payload = {
         quotationNumber: quotationNumber.trim() || undefined,
         partyId,
@@ -331,6 +342,8 @@ export const QuotationEditorModal: React.FC<QuotationEditorModalProps> = ({
         notes,
         termsTemplateId: selectedTemplateId || undefined,
         termsSnapshot: termsList.filter((t) => t.trim().length > 0),
+        billTemplateId: selectedBillTemplateId || undefined,
+        fieldsConfigSnapshot: selBillTpl ? selBillTpl.fieldsConfig : undefined,
         status: targetStatus,
       };
 

@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../api';
 import { Settings as SettingsIcon, Building, Database, Trash2, Shield, Save, Download, Hash, FileText, CheckCircle2, MessageSquare } from 'lucide-react';
 import { WhatsAppSettingsSection } from '../components/WhatsAppSettingsSection';
+import { BillTemplateManager } from '../components/BillTemplateManager';
 
 export const Settings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'terms' | 'numbering' | 'whatsapp'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'terms' | 'numbering' | 'whatsapp' | 'templates'>('profile');
   const [company, setCompany] = useState<any>({});
   const [stockSetting, setStockSetting] = useState('YES');
   const [loading, setLoading] = useState(true);
@@ -296,6 +297,12 @@ export const Settings: React.FC = () => {
             Terms & Conditions Master
           </button>
           <button
+            onClick={() => setActiveTab('templates')}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'templates' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            Document Templates
+          </button>
+          <button
             onClick={() => setActiveTab('whatsapp')}
             className={`px-4 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'whatsapp' ? 'bg-emerald-950 text-white shadow-sm font-extrabold' : 'text-gray-600 hover:text-gray-900'}`}
           >
@@ -304,7 +311,9 @@ export const Settings: React.FC = () => {
         </div>
       </div>
 
-      {activeTab === 'whatsapp' ? (
+      {activeTab === 'templates' ? (
+        <BillTemplateManager />
+      ) : activeTab === 'whatsapp' ? (
         <WhatsAppSettingsSection />
       ) : activeTab === 'numbering' ? (
         /* INVOICE NUMBERING SETTINGS TAB */
