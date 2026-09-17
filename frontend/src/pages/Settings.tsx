@@ -151,6 +151,23 @@ export const Settings: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Signature image size should be less than 2MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      const base64 = uploadEvent.target?.result as string;
+      setCompany((prev: any) => ({ ...prev, signatureUrl: base64 }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSaveCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -568,6 +585,57 @@ export const Settings: React.FC = () => {
                     className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-800 hover:file:bg-emerald-200 cursor-pointer"
                   />
                   <p className="text-[11px] text-gray-500">Upload PNG, JPG, or WebP image. Automatically appears on A4 Tax Invoices.</p>
+                </div>
+              </div>
+
+              {/* Signature Upload & Preference Block */}
+              <div className="border border-gray-200 bg-gray-50 p-4 rounded-xl space-y-3">
+                <div className="flex items-center gap-4">
+                  {company.signatureUrl ? (
+                    <div className="relative group">
+                      <img
+                        src={company.signatureUrl}
+                        alt="Authorized Signature Preview"
+                        className="h-14 max-w-[180px] object-contain bg-white p-1 rounded-lg border border-gray-300 shadow-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setCompany({ ...company, signatureUrl: null })}
+                        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center font-bold shadow"
+                        title="Remove Signature"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="h-14 w-28 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 text-[11px] bg-white font-semibold">
+                      <span>No Signature</span>
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-1">
+                    <label className="block text-xs font-bold text-gray-700 uppercase">Authorized Signature Image (Company Seal / Sign)</label>
+                    <input
+                      type="file"
+                      accept="image/png, image/jpeg, image/jpg"
+                      onChange={handleSignatureUpload}
+                      className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-800 hover:file:bg-emerald-200 cursor-pointer"
+                    />
+                    <p className="text-[11px] text-gray-500">Upload PNG or JPG signature. Stored permanently in database.</p>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-gray-200 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="showSigByDefault"
+                    checked={company.showSignatureByDefault !== false}
+                    onChange={(e) => setCompany({ ...company, showSignatureByDefault: e.target.checked })}
+                    className="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                  />
+                  <label htmlFor="showSigByDefault" className="text-xs font-bold text-gray-800 cursor-pointer">
+                    Show Authorized Signature by default when exporting PDF / Printing (User can still toggle per export)
+                  </label>
                 </div>
               </div>
 

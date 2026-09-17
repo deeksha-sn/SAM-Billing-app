@@ -196,8 +196,10 @@ export const TemplateCustomizerToolbar: React.FC<TemplateCustomizerToolbarProps>
         { key: 'showPaymentMode', label: 'Payment Mode' },
         { key: 'showPaymentTerms', label: 'Payment Terms' },
         { key: 'showDueDate', label: 'Payment Due Date' },
-        { key: 'showNotes', label: 'Notes & Remarks' },
+        {key: 'showNotes', label: 'Notes & Remarks' },
         { key: 'showTerms', label: 'Terms & Conditions' },
+        { key: 'showAuthSignature', label: 'Authorised Signature' },
+        { key: 'showCustomerSignature', label: 'Customer Signature' },
       ],
     },
   ];

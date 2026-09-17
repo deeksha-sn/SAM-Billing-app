@@ -35,16 +35,22 @@ function numberToWords(num: number): string {
 
 export const PrintQuotationModal: React.FC<PrintQuotationModalProps> = ({ quotation, company, onClose }) => {
   const [fieldConfig, setFieldConfig] = useState<BillFieldsConfig>(() => {
+    let base: BillFieldsConfig = DEFAULT_QUOTATION_FIELDS;
     if (quotation?.fieldsConfigSnapshot) {
       try {
-        return typeof quotation.fieldsConfigSnapshot === 'string'
+        base = typeof quotation.fieldsConfigSnapshot === 'string'
           ? JSON.parse(quotation.fieldsConfigSnapshot)
           : quotation.fieldsConfigSnapshot;
       } catch (err) {
         console.error('Failed to parse quotation fieldsConfigSnapshot:', err);
       }
     }
-    return DEFAULT_QUOTATION_FIELDS;
+    const defaultSig = company?.showSignatureByDefault !== false;
+    return {
+      ...base,
+      showSignature: base.showSignature !== undefined ? base.showSignature : defaultSig,
+      showAuthSignature: base.showAuthSignature !== undefined ? base.showAuthSignature : defaultSig,
+    };
   });
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(quotation?.billTemplateId || null);
 
@@ -189,11 +195,50 @@ export const PrintQuotationModal: React.FC<PrintQuotationModalProps> = ({ quotat
 
         {/* Modal Header Controls (Hidden in Print) */}
         <div className="flex flex-col gap-2 pb-3 border-b border-gray-300 no-print">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-base font-bold text-gray-900">A4 Quotation Print & PDF Preview</h2>
-              <p className="text-xs text-gray-500">Smart Agro Machinerys Official Quotation Layout</p>
+          <div className="flex flex-wrap justify-between items-center gap-3">
+            <div className="flex items-center gap-4">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">A4 Quotation Print & PDF Preview</h2>
+                <p className="text-xs text-gray-500">Smart Agro Machinerys Official Quotation Layout</p>
+              </div>
+
+              <div className="flex items-center gap-3 border-l border-gray-300 pl-4">
+                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Signature:</span>
+                <label className="flex items-center gap-1.5 text-xs font-bold text-gray-800 cursor-pointer hover:text-emerald-700">
+                  <input
+                    type="checkbox"
+                    checked={cfg.showSignature !== false && cfg.showAuthSignature !== false}
+                    onChange={(e) => {
+                      const isChecked = e.target.checked;
+                      setFieldConfig((prev) => ({
+                        ...prev,
+                        showSignature: isChecked,
+                        showAuthSignature: isChecked,
+                      }));
+                    }}
+                    className="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                  />
+                  <span>Show Authorized Signature</span>
+                </label>
+
+                <label className="flex items-center gap-1.5 text-xs font-bold text-gray-800 cursor-pointer hover:text-emerald-700">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(cfg.showCustomerSignature)}
+                    onChange={(e) => {
+                      const isChecked = e.target.checked;
+                      setFieldConfig((prev) => ({
+                        ...prev,
+                        showCustomerSignature: isChecked,
+                      }));
+                    }}
+                    className="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                  />
+                  <span>Show Customer Signature</span>
+                </label>
+              </div>
             </div>
+
             <div className="flex items-center gap-2">
               <button
                 onClick={handleDownloadPdf}
@@ -538,14 +583,22 @@ export const PrintQuotationModal: React.FC<PrintQuotationModalProps> = ({ quotat
               )}
 
               {/* Signature Area */}
-              {cfg.showSignature && (
+              {(cfg.showSignature !== false && cfg.showAuthSignature !== false) && (
                 <div className="col-span-3 p-2 flex flex-col justify-between items-center text-center">
                   <p className="font-bold text-black text-[10.5px]">For : {company.businessName || 'SMART AGRO MACHINERYS'}</p>
                   
-                  <div className="my-1">
-                    <div className="text-[9px] font-bold text-emerald-900 border border-emerald-800 px-2 py-0.5 rounded uppercase tracking-wider inline-block">
-                      {company.businessName || 'SMART AGRO MACHINERYS'}
-                    </div>
+                  <div className="my-1 min-h-[40px] flex items-center justify-center">
+                    {company.signatureUrl ? (
+                      <img
+                        src={company.signatureUrl}
+                        alt="Authorized Signature"
+                        className="h-10 max-w-[130px] object-contain"
+                      />
+                    ) : (
+                      <div className="text-[9px] font-bold text-emerald-900 border border-emerald-800 px-2 py-0.5 rounded uppercase tracking-wider inline-block">
+                        {company.businessName || 'SMART AGRO MACHINERYS'}
+                      </div>
+                    )}
                   </div>
 
                   <p className="font-bold text-black text-[10px]">Authorised signature</p>

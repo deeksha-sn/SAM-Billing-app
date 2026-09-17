@@ -37,16 +37,22 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, c
   if (!invoice || !company) return null;
 
   const [fieldConfig, setFieldConfig] = useState<BillFieldsConfig>(() => {
+    let base: BillFieldsConfig = DEFAULT_INVOICE_FIELDS;
     if (invoice?.fieldsConfigSnapshot) {
       try {
-        return typeof invoice.fieldsConfigSnapshot === 'string'
+        base = typeof invoice.fieldsConfigSnapshot === 'string'
           ? JSON.parse(invoice.fieldsConfigSnapshot)
           : invoice.fieldsConfigSnapshot;
       } catch (err) {
         console.error('Failed to parse invoice fieldsConfigSnapshot:', err);
       }
     }
-    return DEFAULT_INVOICE_FIELDS;
+    const defaultSig = company?.showSignatureByDefault !== false;
+    return {
+      ...base,
+      showSignature: base.showSignature !== undefined ? base.showSignature : defaultSig,
+      showAuthSignature: base.showAuthSignature !== undefined ? base.showAuthSignature : defaultSig,
+    };
   });
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(invoice?.billTemplateId || null);
 
@@ -141,12 +147,51 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, c
           }
         `}</style>
 
-        {/* Action Header */}
-        <div className="no-print bg-slate-900 text-white p-4 rounded-xl flex justify-between items-center mb-3">
-          <div className="flex items-center gap-2">
-            <Printer className="w-5 h-5 text-emerald-400" />
-            <h2 className="text-sm font-black uppercase tracking-wider">A4 Tax Invoice Print Preview</h2>
+        {/* Action Header with Signature Toggles */}
+        <div className="no-print bg-slate-900 text-white p-4 rounded-xl flex flex-wrap justify-between items-center gap-3 mb-3">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Printer className="w-5 h-5 text-emerald-400" />
+              <h2 className="text-sm font-black uppercase tracking-wider">A4 Tax Invoice Print Preview</h2>
+            </div>
+
+            <div className="flex items-center gap-3 border-l border-slate-700 pl-4">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Signature:</span>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-white cursor-pointer hover:text-emerald-300">
+                <input
+                  type="checkbox"
+                  checked={cfg.showSignature !== false && cfg.showAuthSignature !== false}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    setFieldConfig((prev) => ({
+                      ...prev,
+                      showSignature: isChecked,
+                      showAuthSignature: isChecked,
+                    }));
+                  }}
+                  className="w-4 h-4 text-emerald-500 rounded border-slate-600 focus:ring-emerald-500"
+                />
+                <span>Show Authorized Signature</span>
+              </label>
+
+              <label className="flex items-center gap-1.5 text-xs font-bold text-white cursor-pointer hover:text-emerald-300">
+                <input
+                  type="checkbox"
+                  checked={Boolean(cfg.showCustomerSignature)}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    setFieldConfig((prev) => ({
+                      ...prev,
+                      showCustomerSignature: isChecked,
+                    }));
+                  }}
+                  className="w-4 h-4 text-emerald-500 rounded border-slate-600 focus:ring-emerald-500"
+                />
+                <span>Show Customer Signature</span>
+              </label>
+            </div>
           </div>
+
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
@@ -449,7 +494,7 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, c
 
             {/* Terms & Conditions and Signature Footer */}
             <div className="pt-4 border-t-2 border-black mt-4 grid grid-cols-2 gap-4 text-[9.5px]">
-              <div>
+              <div className="flex flex-col justify-between space-y-4">
                 {cfg.showTerms && termsList.length > 0 && (
                   <div>
                     <p className="font-bold uppercase text-[9px] mb-1">Terms & Conditions:</p>
@@ -460,17 +505,34 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, c
                     </ul>
                   </div>
                 )}
+
+                {cfg.showCustomerSignature && (
+                  <div className="pt-4 w-36">
+                    <div className="border-t border-black pt-1 text-center font-bold text-xs uppercase">
+                      Customer Signature
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="text-right flex flex-col justify-end items-end space-y-6">
-                {cfg.showSignature && (
-                  <>
-                    <p className="font-bold text-xs">For {company.businessName || 'SMART AGRO MACHINERYS'}</p>
-                    <div className="pt-6">
-                      <p className="border-t border-black pt-1 font-bold text-xs uppercase">Authorised Signatory</p>
-                    </div>
-                  </>
-                )}
+              <div className="text-right flex flex-col justify-end items-end space-y-2">
+                {(cfg.showSignature !== false && cfg.showAuthSignature !== false) ? (
+                  <div className="flex flex-col items-end">
+                    <p className="font-bold text-xs mb-1">For {company.businessName || 'SMART AGRO MACHINERYS'}</p>
+                    {company.signatureUrl ? (
+                      <img
+                        src={company.signatureUrl}
+                        alt="Authorized Signature"
+                        className="h-12 max-w-[150px] object-contain my-1"
+                      />
+                    ) : (
+                      <div className="h-10" />
+                    )}
+                    <p className="border-t border-black pt-1 font-bold text-xs uppercase w-44 text-center">
+                      Authorised Signatory
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </div>
 

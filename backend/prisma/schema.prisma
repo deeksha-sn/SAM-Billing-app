@@ -34,9 +34,11 @@ model User {
 
 model CompanyProfile {
   id             String   @id @default("default")
-  businessName   String   @default("Smart Agro Machinerys")
-  logoUrl        String?
-  address        String   @default("Industrial Area, Main Road")
+  businessName           String   @default("Smart Agro Machinerys")
+  logoUrl                String?
+  signatureUrl           String?
+  showSignatureByDefault Boolean  @default(true)
+  address                String   @default("Industrial Area, Main Road")
   phone          String   @default("+91 98765 43210")
   email          String   @default("info@smartagromachinerys.com")
   gstin          String   @default("29ABCDE1234F1Z5")

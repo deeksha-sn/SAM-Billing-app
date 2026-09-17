@@ -13,16 +13,22 @@ interface PrintChallanModalProps {
 
 export const PrintChallanModal: React.FC<PrintChallanModalProps> = ({ challan, company, onClose }) => {
   const [fieldConfig, setFieldConfig] = useState<BillFieldsConfig>(() => {
+    let base: BillFieldsConfig = DEFAULT_CHALLAN_FIELDS;
     if (challan?.fieldsConfigSnapshot) {
       try {
-        return typeof challan.fieldsConfigSnapshot === 'string'
+        base = typeof challan.fieldsConfigSnapshot === 'string'
           ? JSON.parse(challan.fieldsConfigSnapshot)
           : challan.fieldsConfigSnapshot;
       } catch (err) {
         console.error('Failed to parse challan fieldsConfigSnapshot:', err);
       }
     }
-    return DEFAULT_CHALLAN_FIELDS;
+    const defaultSig = company?.showSignatureByDefault !== false;
+    return {
+      ...base,
+      showSignature: base.showSignature !== undefined ? base.showSignature : defaultSig,
+      showAuthSignature: base.showAuthSignature !== undefined ? base.showAuthSignature : defaultSig,
+    };
   });
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(challan?.billTemplateId || null);
 
@@ -105,10 +111,48 @@ Smart Agro Machinerys`;
       
       {/* Top Action Bar */}
       <div className="bg-slate-900 text-white rounded-t-2xl max-w-4xl w-full px-6 py-3 flex flex-col gap-2 shadow-xl print:hidden border-b border-slate-800">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="font-extrabold text-amber-400 font-mono text-sm">{challan.challanNumber}</span>
-            <span className="text-xs text-slate-400 font-medium">| A4 Print Preview</span>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-amber-400 font-mono text-sm">{challan.challanNumber}</span>
+              <span className="text-xs text-slate-400 font-medium">| A4 Print Preview</span>
+            </div>
+
+            <div className="flex items-center gap-3 border-l border-slate-700 pl-4">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Signature:</span>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-white cursor-pointer hover:text-emerald-300">
+                <input
+                  type="checkbox"
+                  checked={cfg.showSignature !== false && cfg.showAuthSignature !== false}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    setFieldConfig((prev) => ({
+                      ...prev,
+                      showSignature: isChecked,
+                      showAuthSignature: isChecked,
+                    }));
+                  }}
+                  className="w-4 h-4 text-emerald-500 rounded border-slate-600 focus:ring-emerald-500"
+                />
+                <span>Show Authorized Signature</span>
+              </label>
+
+              <label className="flex items-center gap-1.5 text-xs font-bold text-white cursor-pointer hover:text-emerald-300">
+                <input
+                  type="checkbox"
+                  checked={Boolean(cfg.showCustomerSignature)}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    setFieldConfig((prev) => ({
+                      ...prev,
+                      showCustomerSignature: isChecked,
+                    }));
+                  }}
+                  className="w-4 h-4 text-emerald-500 rounded border-slate-600 focus:ring-emerald-500"
+                />
+                <span>Show Receiver Signature</span>
+              </label>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -302,19 +346,36 @@ Smart Agro Machinerys`;
           )}
 
           {/* Signatures Footer */}
-          {cfg.showSignature && (
-            <div className="flex justify-between items-end pt-6 border-t-2 border-slate-900 text-[11px]">
-              <div>
-                <div className="h-10"></div>
-                <div className="border-t border-slate-400 pt-1 font-bold text-slate-700">Receiver's Signature & Stamp</div>
-              </div>
-
-              <div className="text-right">
-                <div className="font-extrabold text-slate-900 mb-8">For {company.companyName || 'Smart Agro Machinerys'}</div>
-                <div className="border-t border-slate-900 pt-1 font-black text-slate-900 uppercase">Authorised Signatory</div>
-              </div>
+          <div className="flex justify-between items-end pt-6 border-t-2 border-slate-900 text-[11px]">
+            <div>
+              {cfg.showCustomerSignature && (
+                <div>
+                  <div className="h-10"></div>
+                  <div className="border-t border-slate-400 pt-1 font-bold text-slate-700">Receiver's Signature & Stamp</div>
+                </div>
+              )}
             </div>
-          )}
+
+            <div className="text-right">
+              {(cfg.showSignature !== false && cfg.showAuthSignature !== false) && (
+                <div>
+                  <div className="font-extrabold text-slate-900 mb-1">For {company.businessName || company.companyName || 'Smart Agro Machinerys'}</div>
+                  <div className="my-1 min-h-[40px] flex justify-end items-center">
+                    {company.signatureUrl ? (
+                      <img
+                        src={company.signatureUrl}
+                        alt="Authorized Signature"
+                        className="h-10 max-w-[140px] object-contain"
+                      />
+                    ) : (
+                      <div className="h-8" />
+                    )}
+                  </div>
+                  <div className="border-t border-slate-900 pt-1 font-black text-slate-900 uppercase">Authorised Signatory</div>
+                </div>
+              )}
+            </div>
+          </div>
 
         </div>
       </div>
