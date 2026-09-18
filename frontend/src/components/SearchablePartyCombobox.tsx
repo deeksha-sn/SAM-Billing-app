@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, UserPlus, Check, X, ChevronDown, Building, Phone, MapPin, User } from 'lucide-react';
+import { Search, UserPlus, Check, X, ChevronDown, Phone, MapPin, User, ChevronUp } from 'lucide-react';
 import { QuickAddPartyModal } from './QuickAddPartyModal';
 import { QuickAddFarmerModal } from './QuickAddFarmerModal';
+import { INDIAN_STATES } from '../utils/gstHelper';
 
 export interface SearchablePartyComboboxProps {
   partyType: 'CUSTOMER' | 'SUPPLIER' | 'ALL';
@@ -34,14 +35,26 @@ export const SearchablePartyCombobox: React.FC<SearchablePartyComboboxProps> = (
   const [showQuickFarmer, setShowQuickFarmer] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Inline New Party Details State
+  const [inlineDetails, setInlineDetails] = useState({
+    mobile: '',
+    altMobile: '',
+    gstin: '',
+    address: '',
+    shippingAddress: '',
+    stateCode: '29',
+    state: 'Karnataka',
+    pincode: '',
+    isShippingSameAsBilling: true,
+  });
+
   const selectedParty = parties.find((p) => p.id === selectedPartyId) || null;
   const selectedFarmer = selectedParty?.farmers?.find((f: any) => f.id === selectedFarmerId) || null;
+  const isExistingSelected = Boolean(selectedParty && selectedParty.id !== 'NEW');
 
   useEffect(() => {
-    if (selectedParty) {
+    if (selectedParty && selectedParty.id !== 'NEW') {
       setQuery(selectedParty.name);
-    } else {
-      setQuery('');
     }
   }, [selectedPartyId, selectedParty]);
 
@@ -50,7 +63,7 @@ export const SearchablePartyCombobox: React.FC<SearchablePartyComboboxProps> = (
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
-        if (selectedParty) {
+        if (selectedParty && selectedParty.id !== 'NEW') {
           setQuery(selectedParty.name);
         }
       }
@@ -74,7 +87,6 @@ export const SearchablePartyCombobox: React.FC<SearchablePartyComboboxProps> = (
     const villageMatch = (p.village || '').toLowerCase().includes(q);
     const districtMatch = (p.district || '').toLowerCase().includes(q);
 
-    // Also match any child farmer's name/phone/village/district
     const farmerMatch = (p.farmers || []).some((f: any) => {
       return (
         (f.name || '').toLowerCase().includes(q) ||
@@ -86,6 +98,31 @@ export const SearchablePartyCombobox: React.FC<SearchablePartyComboboxProps> = (
 
     return nameMatch || mobileMatch || gstinMatch || addressMatch || villageMatch || districtMatch || farmerMatch;
   });
+
+  const emitDraftParty = (currentName: string, updatedDetails = inlineDetails) => {
+    if (!currentName.trim()) return;
+
+    const shipAddr = updatedDetails.isShippingSameAsBilling
+      ? updatedDetails.address
+      : updatedDetails.shippingAddress;
+
+    const draftObj = {
+      id: 'NEW',
+      isNew: true,
+      name: currentName.trim(),
+      type: partyType === 'ALL' ? 'CUSTOMER' : partyType,
+      mobile: updatedDetails.mobile.trim() || null,
+      altMobile: updatedDetails.altMobile.trim() || null,
+      gstin: updatedDetails.gstin.trim() || null,
+      address: updatedDetails.address.trim() || null,
+      shippingAddress: shipAddr ? shipAddr.trim() : null,
+      stateCode: updatedDetails.stateCode,
+      state: updatedDetails.state,
+      pincode: updatedDetails.pincode.trim() || null,
+    };
+
+    onSelectParty(draftObj);
+  };
 
   const handleSelectParty = (party: any, farmer?: any) => {
     onSelectParty(party);
@@ -101,22 +138,56 @@ export const SearchablePartyCombobox: React.FC<SearchablePartyComboboxProps> = (
     onSelectParty(null);
     if (onSelectFarmer) onSelectFarmer(null);
     setQuery('');
+    setInlineDetails({
+      mobile: '',
+      altMobile: '',
+      gstin: '',
+      address: '',
+      shippingAddress: '',
+      stateCode: '29',
+      state: 'Karnataka',
+      pincode: '',
+      isShippingSameAsBilling: true,
+    });
     setIsOpen(true);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setQuery(e.target.value);
+    const val = e.target.value;
+    setQuery(val);
     setIsOpen(true);
-    if (!e.target.value.trim()) {
+
+    if (!val.trim()) {
       onSelectParty(null);
       if (onSelectFarmer) onSelectFarmer(null);
+    } else {
+      // Check if exact match exists
+      const exactMatch = parties.find(
+        (p) => p.name.toLowerCase() === val.toLowerCase().trim()
+      );
+      if (exactMatch) {
+        onSelectParty(exactMatch);
+      } else {
+        // Emit inline draft party
+        emitDraftParty(val);
+      }
     }
   };
 
+  const handleInlineFieldChange = (field: string, val: any) => {
+    const updated = { ...inlineDetails, [field]: val };
+    if (field === 'address' && updated.isShippingSameAsBilling) {
+      updated.shippingAddress = val;
+    }
+    setInlineDetails(updated);
+    emitDraftParty(query, updated);
+  };
+
   const partyLabel = partyType === 'SUPPLIER' ? 'Supplier' : 'Customer';
+  const showInlineForm = !isExistingSelected && query.trim().length > 0;
 
   return (
-    <div className="relative space-y-1.5" ref={containerRef}>
+    <div className="relative space-y-2" ref={containerRef}>
       {label && (
         <div className="flex justify-between items-center mb-1">
           <label className="font-extrabold text-slate-300 uppercase tracking-wider text-[11px]">
@@ -128,7 +199,7 @@ export const SearchablePartyCombobox: React.FC<SearchablePartyComboboxProps> = (
             onClick={() => setShowQuickAdd(true)}
             className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 text-[11px] transition"
           >
-            <UserPlus className="w-3.5 h-3.5" /> + Quick Add {partyLabel}
+            <UserPlus className="w-3.5 h-3.5" /> + Quick Add Modal
           </button>
         </div>
       )}
@@ -136,18 +207,18 @@ export const SearchablePartyCombobox: React.FC<SearchablePartyComboboxProps> = (
       {/* Input Field with Icons */}
       <div className="relative">
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-        
+
         <input
           type="text"
           value={query}
           onFocus={() => setIsOpen(true)}
           onChange={handleInputChange}
-          placeholder={placeholder || `Type ${partyLabel.toLowerCase()} or farmer name, mobile, GSTIN, location...`}
+          placeholder={placeholder || `Type ${partyLabel.toLowerCase()} name, mobile, GSTIN, location...`}
           className="w-full pl-9 pr-10 py-2.5 bg-slate-900 border border-slate-600 rounded-xl font-bold text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition shadow-sm placeholder:text-slate-500"
         />
 
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-          {selectedParty && (
+          {(selectedParty || query) && (
             <button
               type="button"
               onClick={handleClear}
@@ -168,14 +239,14 @@ export const SearchablePartyCombobox: React.FC<SearchablePartyComboboxProps> = (
         </div>
       </div>
 
-      {/* Selected Party Summary Pill */}
-      {selectedParty && (
+      {/* Selected Existing Party Summary Pill */}
+      {isExistingSelected && selectedParty && (
         <div className="px-3 py-2 bg-emerald-950/80 border border-emerald-700/60 rounded-xl text-[11px] flex flex-wrap justify-between items-center gap-2 text-emerald-300">
           <div className="flex items-center gap-2">
-            <span className="font-extrabold text-white text-xs">{selectedParty.name}</span>
+            <span className="font-extrabold text-white text-xs">✓ Linked Customer: {selectedParty.name}</span>
             {selectedParty.mobile && <span>• 📱 {selectedParty.mobile}</span>}
-            {(selectedParty.village || selectedParty.district) && (
-              <span>• 📍 {selectedParty.village ? `${selectedParty.village}, ` : ''}{selectedParty.district || selectedParty.state}</span>
+            {(selectedParty.village || selectedParty.district || selectedParty.address) && (
+              <span>• 📍 {selectedParty.village ? `${selectedParty.village}, ` : ''}{selectedParty.district || selectedParty.address || selectedParty.state}</span>
             )}
             {selectedParty.farmers?.length > 0 && (
               <span className="bg-emerald-900/90 text-emerald-200 px-2 py-0.5 rounded-full font-bold text-[10px]">
@@ -191,100 +262,33 @@ export const SearchablePartyCombobox: React.FC<SearchablePartyComboboxProps> = (
         </div>
       )}
 
-      {/* Delivery / Farmer Selector for Organizations / Main Parties */}
-      {selectedParty && (
-        <div className="p-3 bg-slate-900 border border-slate-700 rounded-2xl space-y-1.5 shadow-md">
-          <div className="flex justify-between items-center text-xs">
-            <span className="font-extrabold text-amber-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5" /> Delivery / Farmer Recipient
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowQuickFarmer(true)}
-              className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 text-[11px] transition"
-            >
-              <UserPlus className="w-3 h-3" /> + Add Farmer to {selectedParty.name}
-            </button>
-          </div>
-
-          <select
-            value={selectedFarmerId || ''}
-            onChange={(e) => {
-              const fid = e.target.value;
-              const f = selectedParty.farmers?.find((farm: any) => farm.id === fid) || null;
-              if (onSelectFarmer) onSelectFarmer(f);
-            }}
-            className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl font-bold text-xs text-white focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="">-- Deliver to Main Party ({selectedParty.name}) Directly --</option>
-            {selectedParty.farmers?.map((f: any) => (
-              <option key={f.id} value={f.id}>
-                {f.name} • 📱 {f.mobile} ({f.village || f.district || f.state}) {f.machines?.length ? `[${f.machines.length} Machines]` : ''}
-              </option>
-            ))}
-          </select>
-
-          {selectedFarmer && (
-            <div className="mt-1 px-3 py-1.5 bg-amber-950/60 border border-amber-800/60 rounded-xl text-[11px] flex items-center justify-between text-amber-200">
-              <div>
-                <span className="font-bold text-white">Deliver / Ship To:</span> {selectedFarmer.name} (📱 {selectedFarmer.mobile})
-                <span className="block text-[10px] text-amber-300/80">{selectedFarmer.address || selectedFarmer.village}, {selectedFarmer.district}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => onSelectFarmer && onSelectFarmer(null)}
-                className="text-slate-400 hover:text-white text-[10px] underline"
-              >
-                Reset Farmer
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Live Dropdown Results Overlay */}
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full mt-1 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden z-50 max-h-80 overflow-y-auto divide-y divide-slate-800">
+        <div className="absolute left-0 right-0 top-full mt-1 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden z-50 max-h-72 overflow-y-auto divide-y divide-slate-800">
           
-          {/* Add New Party Button */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              setShowQuickAdd(true);
-            }}
-            className="w-full p-3 bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 font-extrabold text-xs flex items-center justify-between border-b border-slate-700 transition"
-          >
-            <span className="flex items-center gap-2">
-              <UserPlus className="w-4 h-4 text-emerald-400" />
-              <span>+ Add New {partyLabel} "{query.trim() || ''}"</span>
-            </span>
-            <span className="text-[10px] bg-emerald-700 text-white px-2 py-0.5 rounded font-mono">
-              Quick Create
-            </span>
-          </button>
+          {/* Create Inline Party Hint Header */}
+          {query.trim() && !filteredParties.some((p) => p.name.toLowerCase() === query.trim().toLowerCase()) && (
+            <div className="p-2.5 bg-emerald-950/60 text-emerald-300 font-extrabold text-xs flex items-center justify-between border-b border-slate-700">
+              <span className="flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-emerald-400" />
+                <span>Creating New {partyLabel}: "{query.trim()}"</span>
+              </span>
+              <span className="text-[10px] bg-emerald-700 text-white px-2 py-0.5 rounded font-mono">
+                Inline Entry Below
+              </span>
+            </div>
+          )}
 
-          {/* Results List */}
+          {/* Existing Results List */}
           {filteredParties.length === 0 ? (
-            <div className="p-4 text-center text-slate-400 text-xs">
-              No matching {partyLabel.toLowerCase()} found for "{query}".
+            <div className="p-3 text-center text-slate-400 text-xs">
+              No existing {partyLabel.toLowerCase()} matched "{query}". Fill details below to save as new {partyLabel.toLowerCase()}.
             </div>
           ) : (
             filteredParties.map((p) => {
               const isSelected = p.id === selectedPartyId;
-              const matchedFarmers = (p.farmers || []).filter((f: any) => {
-                if (!query.trim()) return false;
-                const q = query.toLowerCase().trim();
-                return (
-                  (f.name || '').toLowerCase().includes(q) ||
-                  (f.mobile || '').includes(q) ||
-                  (f.village || '').toLowerCase().includes(q)
-                );
-              });
-
               return (
                 <div key={p.id} className="divide-y divide-slate-800/50">
-                  {/* Main Party Row */}
                   <div
                     onClick={() => handleSelectParty(p)}
                     className={`p-3 hover:bg-slate-800/90 cursor-pointer transition flex justify-between items-center text-xs ${
@@ -318,32 +322,163 @@ export const SearchablePartyCombobox: React.FC<SearchablePartyComboboxProps> = (
                       </span>
                     )}
                   </div>
-
-                  {/* Matched Farmer Sub-rows if query matched a specific farmer */}
-                  {matchedFarmers.map((f: any) => (
-                    <div
-                      key={f.id}
-                      onClick={() => handleSelectParty(p, f)}
-                      className="p-2.5 pl-8 bg-slate-950/70 hover:bg-emerald-950/60 cursor-pointer transition flex justify-between items-center text-xs border-t border-slate-800"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="font-bold text-amber-300 text-xs flex items-center gap-1.5">
-                          <span>👨‍🌾 Farmer: {f.name}</span>
-                          <span className="text-[10px] text-slate-400 font-normal">(under {p.name})</span>
-                        </div>
-                        <div className="text-[11px] text-slate-400 font-mono">
-                          📱 {f.mobile} • 📍 {f.village || f.district || f.state}
-                        </div>
-                      </div>
-                      <span className="text-[10px] bg-amber-900/60 text-amber-200 px-2 py-0.5 rounded font-bold">
-                        Select Farmer
-                      </span>
-                    </div>
-                  ))}
                 </div>
               );
             })
           )}
+        </div>
+      )}
+
+      {/* INLINE NEW CUSTOMER DETAILS ENTRY FORM */}
+      {showInlineForm && (
+        <div className="p-4 bg-slate-900/90 border border-emerald-500/40 rounded-2xl space-y-3 shadow-lg text-xs">
+          <div className="flex justify-between items-center border-b border-slate-700/80 pb-2">
+            <span className="font-extrabold text-emerald-400 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              <UserPlus className="w-4 h-4 text-emerald-400" /> {partyLabel} Details (New Customer Entry)
+            </span>
+            <span className="text-[10px] text-slate-400 italic">
+              Phone is optional • Will save automatically with bill
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {/* Customer Name */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">
+                {partyLabel} Name *
+              </label>
+              <input
+                type="text"
+                value={query}
+                onChange={handleInputChange}
+                className="w-full p-2 bg-slate-950 border border-slate-700 rounded-xl font-bold text-white text-xs focus:ring-1 focus:ring-emerald-500"
+                placeholder="e.g. Deeksha"
+              />
+            </div>
+
+            {/* Phone Number (OPTIONAL!) */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">
+                Phone Number <span className="text-slate-500 font-normal">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                value={inlineDetails.mobile}
+                onChange={(e) => handleInlineFieldChange('mobile', e.target.value)}
+                className="w-full p-2 bg-slate-950 border border-slate-700 rounded-xl font-mono text-white text-xs focus:ring-1 focus:ring-emerald-500"
+                placeholder="Optional mobile number"
+              />
+            </div>
+
+            {/* Alternate Phone */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">
+                Alt Phone <span className="text-slate-500 font-normal">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                value={inlineDetails.altMobile}
+                onChange={(e) => handleInlineFieldChange('altMobile', e.target.value)}
+                className="w-full p-2 bg-slate-950 border border-slate-700 rounded-xl font-mono text-white text-xs focus:ring-1 focus:ring-emerald-500"
+                placeholder="Secondary mobile"
+              />
+            </div>
+
+            {/* GSTIN */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">
+                GSTIN <span className="text-slate-500 font-normal">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                value={inlineDetails.gstin}
+                onChange={(e) => handleInlineFieldChange('gstin', e.target.value.toUpperCase())}
+                className="w-full p-2 bg-slate-950 border border-slate-700 rounded-xl font-mono uppercase text-emerald-300 text-xs focus:ring-1 focus:ring-emerald-500"
+                placeholder="e.g. 29ABCDE1234F1Z5"
+              />
+            </div>
+
+            {/* State */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">
+                State / State Code
+              </label>
+              <select
+                value={`${inlineDetails.stateCode}-${inlineDetails.state}`}
+                onChange={(e) => {
+                  const parts = e.target.value.split('-');
+                  const code = parts[0];
+                  const stName = parts.slice(1).join('-');
+                  const updated = { ...inlineDetails, stateCode: code, state: stName };
+                  setInlineDetails(updated);
+                  emitDraftParty(query, updated);
+                }}
+                className="w-full p-2 bg-slate-950 border border-slate-700 rounded-xl font-semibold text-white text-xs focus:ring-1 focus:ring-emerald-500"
+              >
+                {INDIAN_STATES.map((s) => (
+                  <option key={s.code} value={`${s.code}-${s.name}`}>
+                    {s.code}-{s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* PIN Code */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">
+                PIN Code <span className="text-slate-500 font-normal">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                value={inlineDetails.pincode}
+                onChange={(e) => handleInlineFieldChange('pincode', e.target.value)}
+                className="w-full p-2 bg-slate-950 border border-slate-700 rounded-xl font-mono text-white text-xs focus:ring-1 focus:ring-emerald-500"
+                placeholder="e.g. 570001"
+              />
+            </div>
+
+            {/* Billing Address */}
+            <div className="md:col-span-2 lg:col-span-3">
+              <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">
+                Billing Address <span className="text-slate-500 font-normal">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                value={inlineDetails.address}
+                onChange={(e) => handleInlineFieldChange('address', e.target.value)}
+                className="w-full p-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:ring-1 focus:ring-emerald-500"
+                placeholder="Street address, village, taluk..."
+              />
+            </div>
+
+            {/* Shipping Address & Same Checkbox */}
+            <div className="md:col-span-2 lg:col-span-3 space-y-1.5">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-bold text-slate-300 uppercase">
+                  Shipping Address <span className="text-slate-500 font-normal">(Optional)</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-emerald-400 select-none font-bold">
+                  <input
+                    type="checkbox"
+                    checked={inlineDetails.isShippingSameAsBilling}
+                    onChange={(e) => handleInlineFieldChange('isShippingSameAsBilling', e.target.checked)}
+                    className="w-3.5 h-3.5 accent-emerald-500 rounded"
+                  />
+                  <span>Same as Billing Address</span>
+                </label>
+              </div>
+
+              {!inlineDetails.isShippingSameAsBilling && (
+                <input
+                  type="text"
+                  value={inlineDetails.shippingAddress}
+                  onChange={(e) => handleInlineFieldChange('shippingAddress', e.target.value)}
+                  className="w-full p-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:ring-1 focus:ring-emerald-500"
+                  placeholder="Different shipping destination..."
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
 

@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import { generateDocumentNumber } from '../utils/numbering';
 import { calculateItemGst, isInterStateTransaction } from '../utils/gstHelper';
 import { resolveTemplateSnapshot } from './templates';
+import { ensurePartyExists } from '../utils/partyHelper';
 
 export async function getPurchases(req: AuthRequest, res: Response) {
   try {
@@ -52,6 +53,7 @@ export async function createPurchase(req: AuthRequest, res: Response) {
   try {
     const {
       partyId,
+      newPartyData,
       supplierInvoiceNo,
       purchaseDate,
       items,
@@ -70,13 +72,14 @@ export async function createPurchase(req: AuthRequest, res: Response) {
       fieldsConfigSnapshot,
     } = req.body;
 
-    if (!partyId || !items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'Supplier and purchase line items are required' });
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Purchase line items are required' });
     }
 
+    const resolvedPartyId = await ensurePartyExists(prisma, partyId, newPartyData || req.body, 'SUPPLIER');
     const templateInfo = await resolveTemplateSnapshot('PURCHASE', billTemplateId, fieldsConfigSnapshot);
 
-    const supplier = await prisma.party.findUnique({ where: { id: partyId } });
+    const supplier = await prisma.party.findUnique({ where: { id: resolvedPartyId } });
     if (!supplier) return res.status(404).json({ error: 'Supplier not found' });
 
     const company = await prisma.companyProfile.findUnique({ where: { id: 'default' } });
@@ -297,8 +300,8 @@ export async function updatePurchase(req: AuthRequest, res: Response) {
         finalPurNo = candidateNo;
       }
 
-      const targetPartyId = partyId || existing.partyId;
-      const supplier = await tx.party.findUnique({ where: { id: targetPartyId } });
+      const resolvedPartyId = await ensurePartyExists(tx, partyId || existing.partyId, req.body.newPartyData, 'SUPPLIER');
+      const supplier = await tx.party.findUnique({ where: { id: resolvedPartyId } });
       if (!supplier) throw new Error('Supplier not found');
 
       const company = await tx.companyProfile.findUnique({ where: { id: 'default' } });
@@ -419,7 +422,7 @@ export async function updatePurchase(req: AuthRequest, res: Response) {
         data: {
           purchaseNumber: finalPurNo,
           supplierInvoiceNo: supplierInvoiceNo !== undefined ? supplierInvoiceNo : existing.supplierInvoiceNo,
-          partyId: targetPartyId,
+          partyId: resolvedPartyId,
           purchaseDate: purchaseDate ? new Date(purchaseDate) : existing.purchaseDate,
           supplierStateCode: supplier.stateCode,
           isInterState: isInterState,

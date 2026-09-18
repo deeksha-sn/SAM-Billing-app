@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import { generateDocumentNumber } from '../utils/numbering';
 import { calculateItemGst, isInterStateTransaction } from '../utils/gstHelper';
 import { resolveTemplateSnapshot } from './templates';
+import { ensurePartyExists } from '../utils/partyHelper';
 
 // Helper function to process BOM & Stock Deduction in a transaction
 export async function applyInvoiceStockDeduction(tx: any, invoiceId: string, invoiceNumber: string, partyId: string, userId?: string) {
@@ -217,6 +218,7 @@ export async function createInvoice(req: AuthRequest, res: Response) {
   try {
     const {
       partyId,
+      newPartyData,
       farmerId,
       invoiceDate,
       items,
@@ -241,13 +243,14 @@ export async function createInvoice(req: AuthRequest, res: Response) {
       fieldsConfigSnapshot,
     } = req.body;
 
-    if (!partyId || !items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'Customer and invoice line items are required' });
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Invoice line items are required' });
     }
 
+    const resolvedPartyId = await ensurePartyExists(prisma, partyId, newPartyData || req.body, 'CUSTOMER');
     const templateInfo = await resolveTemplateSnapshot('INVOICE', billTemplateId, fieldsConfigSnapshot);
 
-    const party = await prisma.party.findUnique({ where: { id: partyId } });
+    const party = await prisma.party.findUnique({ where: { id: resolvedPartyId } });
     if (!party) return res.status(404).json({ error: 'Customer not found' });
 
     const company = await prisma.companyProfile.findUnique({ where: { id: 'default' } });
@@ -502,56 +505,57 @@ export async function createInvoice(req: AuthRequest, res: Response) {
 export async function updateInvoice(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
-    const {
-      partyId,
-      invoiceDate,
-      invoiceNumber,
-      items,
-      paymentMode,
-      amountPaid,
-      status,
-      notes,
-      ewayBillNo,
-      placeOfSupply,
-      poNumber,
-      poDate,
-      termsTemplateId,
-      termsSnapshot,
-      billTemplateId,
-      fieldsConfigSnapshot,
-    } = req.body;
+      const {
+        partyId,
+        newPartyData,
+        invoiceDate,
+        invoiceNumber,
+        items,
+        paymentMode,
+        amountPaid,
+        status,
+        notes,
+        ewayBillNo,
+        placeOfSupply,
+        poNumber,
+        poDate,
+        termsTemplateId,
+        termsSnapshot,
+        billTemplateId,
+        fieldsConfigSnapshot,
+      } = req.body;
 
-    const invoice = await prisma.invoice.findUnique({ where: { id }, include: { party: true, items: true } });
-    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+      const invoice = await prisma.invoice.findUnique({ where: { id }, include: { party: true, items: true } });
+      if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
-    const formattedTermsSnapshot = termsSnapshot !== undefined
-      ? (Array.isArray(termsSnapshot)
-          ? JSON.stringify(termsSnapshot.filter((t: any) => typeof t === 'string' && t.trim().length > 0))
-          : typeof termsSnapshot === 'string'
-          ? termsSnapshot
-          : null)
-      : invoice.termsSnapshot;
+      const formattedTermsSnapshot = termsSnapshot !== undefined
+        ? (Array.isArray(termsSnapshot)
+            ? JSON.stringify(termsSnapshot.filter((t: any) => typeof t === 'string' && t.trim().length > 0))
+            : typeof termsSnapshot === 'string'
+            ? termsSnapshot
+            : null)
+        : invoice.termsSnapshot;
 
-    const result = await prisma.$transaction(async (tx) => {
-      let finalInvoiceNo = invoice.invoiceNumber;
-      if (invoiceNumber && invoiceNumber.trim() !== invoice.invoiceNumber) {
-        if (req.user?.role !== 'ADMIN') {
-          throw new Error('Only ADMIN users can edit invoice numbers');
+      const result = await prisma.$transaction(async (tx) => {
+        let finalInvoiceNo = invoice.invoiceNumber;
+        if (invoiceNumber && invoiceNumber.trim() !== invoice.invoiceNumber) {
+          if (req.user?.role !== 'ADMIN') {
+            throw new Error('Only ADMIN users can edit invoice numbers');
+          }
+          const candidateNo = invoiceNumber.trim();
+          const existingWithNo = await tx.invoice.findFirst({
+            where: { invoiceNumber: candidateNo, NOT: { id: invoice.id } },
+          });
+          if (existingWithNo) {
+            throw new Error(`Invoice number "${candidateNo}" already exists.`);
+          }
+          finalInvoiceNo = candidateNo;
         }
-        const candidateNo = invoiceNumber.trim();
-        const existingWithNo = await tx.invoice.findFirst({
-          where: { invoiceNumber: candidateNo, NOT: { id: invoice.id } },
-        });
-        if (existingWithNo) {
-          throw new Error(`Invoice number "${candidateNo}" already exists.`);
-        }
-        finalInvoiceNo = candidateNo;
-      }
 
-      let newStatus = status || invoice.status;
-      const targetPartyId = partyId || invoice.partyId;
-      const targetParty = await tx.party.findUnique({ where: { id: targetPartyId } });
-      if (!targetParty) throw new Error('Customer not found');
+        let newStatus = status || invoice.status;
+        const resolvedPartyId = await ensurePartyExists(tx, partyId || invoice.partyId, newPartyData, 'CUSTOMER');
+        const targetParty = await tx.party.findUnique({ where: { id: resolvedPartyId } });
+        if (!targetParty) throw new Error('Customer not found');
 
       const company = await tx.companyProfile.findUnique({ where: { id: 'default' } });
       const companyStateCode = company?.stateCode || company?.state || '29';
@@ -646,7 +650,7 @@ export async function updateInvoice(req: AuthRequest, res: Response) {
         where: { id },
         data: {
           invoiceNumber: finalInvoiceNo,
-          partyId: targetPartyId,
+          partyId: resolvedPartyId,
           invoiceDate: invoiceDate ? new Date(invoiceDate) : invoice.invoiceDate,
           customerStateCode: targetParty.stateCode,
           isInterState: isInterState,

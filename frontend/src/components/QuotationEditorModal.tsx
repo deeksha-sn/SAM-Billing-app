@@ -320,8 +320,13 @@ export const QuotationEditorModal: React.FC<QuotationEditorModalProps> = ({
     e.preventDefault();
     setErrorMessage('');
 
-    if (!partyId) {
-      setErrorMessage('Please select or create a customer');
+    if (!partyId && !selectedParty) {
+      setErrorMessage('Please select or enter a customer');
+      return;
+    }
+
+    if ((partyId === 'NEW' || selectedParty?.isNew) && (!selectedParty?.name || !selectedParty.name.trim())) {
+      setErrorMessage('Customer Name is required');
       return;
     }
 
@@ -335,7 +340,8 @@ export const QuotationEditorModal: React.FC<QuotationEditorModalProps> = ({
       const selBillTpl = billTemplates.find((t) => t.id === selectedBillTemplateId);
       const payload = {
         quotationNumber: quotationNumber.trim() || undefined,
-        partyId,
+        partyId: partyId || 'NEW',
+        newPartyData: (partyId === 'NEW' || selectedParty?.isNew) ? selectedParty : undefined,
         quotationDate,
         validityDate,
         items,
@@ -442,9 +448,15 @@ export const QuotationEditorModal: React.FC<QuotationEditorModalProps> = ({
                 parties={parties}
                 onSelectParty={(p) => {
                   if (p) {
-                    handlePartyChange(p.id);
+                    if (p.id === 'NEW' || p.isNew) {
+                      setPartyId('NEW');
+                      setSelectedParty(p);
+                    } else {
+                      handlePartyChange(p.id);
+                    }
                   } else {
                     setPartyId('');
+                    setSelectedParty(null);
                   }
                 }}
                 onPartyCreated={(newP) => {

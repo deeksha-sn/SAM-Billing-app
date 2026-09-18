@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import { AuthRequest } from '../middleware/auth';
 import { generateDocumentNumber } from '../utils/numbering';
 import { resolveTemplateSnapshot } from './templates';
+import { ensurePartyExists } from '../utils/partyHelper';
 
 export async function getDeliveryChallans(req: AuthRequest, res: Response) {
   try {
@@ -42,6 +43,7 @@ export async function createDeliveryChallan(req: AuthRequest, res: Response) {
   try {
     const {
       partyId,
+      newPartyData,
       farmerId,
       challanDate,
       deliveryAddress,
@@ -60,13 +62,14 @@ export async function createDeliveryChallan(req: AuthRequest, res: Response) {
       fieldsConfigSnapshot,
     } = req.body;
 
-    if (!partyId || !items || !Array.isArray(items) || items.length === 0) {
+    if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Customer and items are required for Delivery Challan' });
     }
 
+    const resolvedPartyId = await ensurePartyExists(prisma, partyId, newPartyData || req.body, 'CUSTOMER');
     const templateInfo = await resolveTemplateSnapshot('DELIVERY_CHALLAN', billTemplateId, fieldsConfigSnapshot);
 
-    const party = await prisma.party.findUnique({ where: { id: partyId } });
+    const party = await prisma.party.findUnique({ where: { id: resolvedPartyId } });
     if (!party) return res.status(404).json({ error: 'Customer not found' });
 
     // Check system setting for stock impact
@@ -206,8 +209,8 @@ export async function updateDeliveryChallan(req: AuthRequest, res: Response) {
         finalDcNo = candidateNo;
       }
 
-      const targetPartyId = partyId || existing.partyId;
-      const party = await tx.party.findUnique({ where: { id: targetPartyId } });
+      const resolvedPartyId = await ensurePartyExists(tx, partyId || existing.partyId, req.body.newPartyData, 'CUSTOMER');
+      const party = await tx.party.findUnique({ where: { id: resolvedPartyId } });
       if (!party) throw new Error('Customer not found');
 
       // STEP 1: Reverse OLD stock deduction if DC affected stock previously
@@ -268,7 +271,7 @@ export async function updateDeliveryChallan(req: AuthRequest, res: Response) {
         where: { id },
         data: {
           challanNumber: finalDcNo,
-          partyId: targetPartyId,
+          partyId: resolvedPartyId,
           farmerId: farmerId !== undefined ? farmerId : existing.farmerId,
           challanDate: challanDate ? new Date(challanDate) : existing.challanDate,
           deliveryAddress: deliveryAddress || existing.deliveryAddress,

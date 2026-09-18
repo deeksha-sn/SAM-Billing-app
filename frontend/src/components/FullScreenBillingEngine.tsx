@@ -371,8 +371,13 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
 
   // Save Handler
   const handleSave = async (saveStatus: string = 'CONFIRMED') => {
-    if (!selectedPartyId) {
-      setErrorMsg(`Please select a ${partyTypeFilter.toLowerCase()}`);
+    if (!selectedPartyId && !selectedParty) {
+      setErrorMsg(`Please select or enter a ${partyTypeFilter.toLowerCase()}`);
+      return;
+    }
+
+    if ((selectedPartyId === 'NEW' || selectedParty?.id === 'NEW' || selectedParty?.isNew) && (!selectedParty?.name || !selectedParty.name.trim())) {
+      setErrorMsg(`${partyTypeFilter === 'SUPPLIER' ? 'Supplier' : 'Customer'} Name is required`);
       return;
     }
 
@@ -386,7 +391,8 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
     setErrorMsg(null);
 
     const payload = {
-      partyId: selectedPartyId,
+      partyId: selectedPartyId || 'NEW',
+      newPartyData: (selectedPartyId === 'NEW' || selectedParty?.id === 'NEW' || selectedParty?.isNew) ? selectedParty : undefined,
       farmerId: selectedFarmerId || null,
       invoiceDate: docDate,
       purchaseDate: docDate,
@@ -548,7 +554,14 @@ export const FullScreenBillingEngine: React.FC<FullScreenBillingEngineProps> = (
                 parties={parties}
                 onSelectParty={(p) => {
                   if (p) {
-                    handlePartySelect(p.id);
+                    if (p.id === 'NEW' || p.isNew) {
+                      setSelectedPartyId('NEW');
+                      setSelectedParty(p);
+                      setBillingAddress(p.address || '');
+                      setDeliveryLocation(p.shippingAddress || p.address || '');
+                    } else {
+                      handlePartySelect(p.id);
+                    }
                   } else {
                     setSelectedPartyId('');
                     setSelectedParty(null);

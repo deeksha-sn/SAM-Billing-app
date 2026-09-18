@@ -52,6 +52,7 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
   // Form State
   const [invoiceNumberInput, setInvoiceNumberInput] = useState(invoice?.invoiceNumber || '');
   const [selectedPartyId, setSelectedPartyId] = useState(invoice?.partyId || '');
+  const [draftParty, setDraftParty] = useState<any | null>(null);
   const [invoiceDate, setInvoiceDate] = useState(
     invoice?.invoiceDate
       ? new Date(invoice.invoiceDate).toISOString().split('T')[0]
@@ -352,8 +353,13 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
 
   // Submit Invoice (Save Draft or Confirm)
   const handleSubmitInvoice = async (targetStatus: 'DRAFT' | 'CONFIRMED') => {
-    if (!selectedPartyId) {
-      alert('Please select a customer');
+    if (!selectedPartyId && !draftParty) {
+      alert('Please select or enter a customer');
+      return;
+    }
+
+    if ((selectedPartyId === 'NEW' || draftParty?.isNew) && (!selectedParty?.name || !selectedParty.name.trim())) {
+      alert('Customer Name is required');
       return;
     }
 
@@ -368,7 +374,8 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
       const selBillTpl = billTemplates.find((t) => t.id === selectedBillTemplateId);
       const payload = {
         invoiceNumber: invoiceNumberInput.trim() || undefined,
-        partyId: selectedPartyId,
+        partyId: selectedPartyId || 'NEW',
+        newPartyData: (selectedPartyId === 'NEW' || draftParty?.isNew) ? selectedParty : undefined,
         invoiceDate,
         items: validLines,
         ewayBillNo: ewayBillNo.trim() || null,
@@ -508,9 +515,19 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
                   parties={parties}
                   onSelectParty={(p) => {
                     if (p) {
-                      handlePartySelect(p.id);
+                      if (p.id === 'NEW' || p.isNew) {
+                        setSelectedPartyId('NEW');
+                        setDraftParty(p);
+                        const stCode = normalizeStateCode(p.stateCode || p.state || '29');
+                        const stName = p.state || getStateNameFromCode(stCode);
+                        setPlaceOfSupply(`${stCode}-${stName}`);
+                      } else {
+                        setDraftParty(null);
+                        handlePartySelect(p.id);
+                      }
                     } else {
                       setSelectedPartyId('');
+                      setDraftParty(null);
                     }
                   }}
                   onPartyCreated={(newP) => {

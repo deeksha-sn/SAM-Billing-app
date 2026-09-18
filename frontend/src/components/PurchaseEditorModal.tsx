@@ -29,6 +29,7 @@ export const PurchaseEditorModal: React.FC<PurchaseEditorModalProps> = ({
   const [amountPaid, setAmountPaid] = useState(purchase?.amountPaid || 0);
 
   const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [selectedSupplier, setSelectedSupplier] = useState<any | null>(purchase?.party || null);
   const [itemsList, setItemsList] = useState<any[]>([]);
   const [lineItems, setLineItems] = useState<any[]>(
     purchase?.items?.length > 0
@@ -240,14 +241,22 @@ export const PurchaseEditorModal: React.FC<PurchaseEditorModalProps> = ({
                 parties={suppliers}
                 onSelectParty={(p) => {
                   if (p) {
-                    setPartyId(p.id);
+                    if (p.id === 'NEW' || p.isNew) {
+                      setPartyId('NEW');
+                      setSelectedSupplier(p);
+                    } else {
+                      setPartyId(p.id);
+                      setSelectedSupplier(p);
+                    }
                   } else {
                     setPartyId('');
+                    setSelectedSupplier(null);
                   }
                 }}
                 onPartyCreated={(newP) => {
                   setSuppliers([...suppliers, newP]);
                   setPartyId(newP.id);
+                  setSelectedSupplier(newP);
                 }}
               />
             </div>

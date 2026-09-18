@@ -5,6 +5,7 @@ import { generateDocumentNumber } from '../utils/numbering';
 import { calculateItemGst, isInterStateTransaction } from '../utils/gstHelper';
 import { applyInvoiceStockDeduction } from './sales';
 import { resolveTemplateSnapshot } from './templates';
+import { ensurePartyExists } from '../utils/partyHelper';
 
 export async function getQuotations(req: AuthRequest, res: Response) {
   try {
@@ -53,6 +54,7 @@ export async function createQuotation(req: AuthRequest, res: Response) {
   try {
     const {
       partyId,
+      newPartyData,
       farmerId,
       quotationDate,
       validityDate,
@@ -70,17 +72,14 @@ export async function createQuotation(req: AuthRequest, res: Response) {
       fieldsConfigSnapshot,
     } = req.body;
 
-    if (!partyId) {
-      return res.status(400).json({ error: 'Customer is required' });
-    }
-
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'At least one item is required' });
     }
 
+    const resolvedPartyId = await ensurePartyExists(prisma, partyId, newPartyData || req.body, 'CUSTOMER');
     const templateInfo = await resolveTemplateSnapshot('QUOTATION', billTemplateId, fieldsConfigSnapshot);
 
-    const party = await prisma.party.findUnique({ where: { id: partyId } });
+    const party = await prisma.party.findUnique({ where: { id: resolvedPartyId } });
     if (!party) return res.status(404).json({ error: 'Customer not found' });
 
     const company = await prisma.companyProfile.findUnique({ where: { id: 'default' } });
@@ -253,8 +252,8 @@ export async function updateQuotation(req: AuthRequest, res: Response) {
         finalQuoNo = candidateNo;
       }
 
-      const targetPartyId = partyId || existing.partyId;
-      const party = await tx.party.findUnique({ where: { id: targetPartyId } });
+      const resolvedPartyId = await ensurePartyExists(tx, partyId || existing.partyId, req.body.newPartyData, 'CUSTOMER');
+      const party = await tx.party.findUnique({ where: { id: resolvedPartyId } });
       if (!party) throw new Error('Customer not found');
 
       const company = await tx.companyProfile.findUnique({ where: { id: 'default' } });
@@ -341,7 +340,7 @@ export async function updateQuotation(req: AuthRequest, res: Response) {
         where: { id },
         data: {
           quotationNumber: finalQuoNo,
-          partyId: targetPartyId,
+          partyId: resolvedPartyId,
           quotationDate: quotationDate ? new Date(quotationDate) : existing.quotationDate,
           validityDate: validityDate ? new Date(validityDate) : existing.validityDate,
           customerStateCode: party.stateCode,

@@ -122,18 +122,20 @@ export async function createParty(req: AuthRequest, res: Response) {
       notes,
     } = req.body;
 
-    if (!name || !mobile) {
-      return res.status(400).json({ error: 'Party Name and Mobile Number are required' });
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Party Name is required' });
     }
+
+    const cleanMobile = mobile && mobile.trim() ? mobile.trim() : '';
 
     // Check for duplicate warning/blocking
     const duplicateChecks: any[] = [];
-    if (mobile) duplicateChecks.push({ mobile });
+    if (cleanMobile) duplicateChecks.push({ mobile: cleanMobile });
     if (gstin && gstin.trim()) duplicateChecks.push({ gstin: gstin.trim() });
 
     if (duplicateChecks.length > 0) {
       const existing = await prisma.party.findFirst({
-        where: { OR: duplicateChecks },
+        where: { type: type || 'CUSTOMER', OR: duplicateChecks },
       });
       if (existing) {
         return res.status(400).json({
@@ -153,11 +155,11 @@ export async function createParty(req: AuthRequest, res: Response) {
 
     const party = await prisma.party.create({
       data: {
-        name,
+        name: name.trim(),
         type: type || 'CUSTOMER',
         customerType: customerType || 'FARMER',
         contactPerson,
-        mobile,
+        mobile: cleanMobile,
         altMobile,
         email,
         address,

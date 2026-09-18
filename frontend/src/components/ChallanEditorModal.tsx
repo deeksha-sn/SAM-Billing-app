@@ -32,6 +32,7 @@ export const ChallanEditorModal: React.FC<ChallanEditorModalProps> = ({
   const [notes, setNotes] = useState(challan?.notes || '');
 
   const [customers, setCustomers] = useState<any[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(challan?.party || null);
   const [itemsList, setItemsList] = useState<any[]>([]);
   const [lineItems, setLineItems] = useState<any[]>(
     challan?.items?.length > 0
@@ -194,9 +195,17 @@ export const ChallanEditorModal: React.FC<ChallanEditorModalProps> = ({
                 parties={customers}
                 onSelectParty={(p) => {
                   if (p) {
-                    handlePartyChange(p.id);
+                    if (p.id === 'NEW' || p.isNew) {
+                      setPartyId('NEW');
+                      setSelectedCustomer(p);
+                      setDeliveryAddress(p.shippingAddress || p.address || '');
+                      setContactNumber(p.mobile || '');
+                    } else {
+                      handlePartyChange(p.id);
+                    }
                   } else {
                     setPartyId('');
+                    setSelectedCustomer(null);
                   }
                 }}
                 onPartyCreated={(newP) => {
