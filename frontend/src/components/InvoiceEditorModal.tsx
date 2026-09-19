@@ -353,12 +353,14 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
 
   // Submit Invoice (Save Draft or Confirm)
   const handleSubmitInvoice = async (targetStatus: 'DRAFT' | 'CONFIRMED') => {
-    if (!selectedPartyId && !draftParty) {
+    const effectiveParty = (selectedPartyId === 'NEW' || draftParty?.isNew || selectedParty?.isNew) ? (draftParty || selectedParty) : selectedParty;
+
+    if (!selectedPartyId && !effectiveParty) {
       alert('Please select or enter a customer');
       return;
     }
 
-    if ((selectedPartyId === 'NEW' || draftParty?.isNew) && (!selectedParty?.name || !selectedParty.name.trim())) {
+    if ((selectedPartyId === 'NEW' || draftParty?.isNew || selectedParty?.isNew) && (!effectiveParty?.name || !effectiveParty.name.trim())) {
       alert('Customer Name is required');
       return;
     }
@@ -375,7 +377,7 @@ export const InvoiceEditorModal: React.FC<InvoiceEditorModalProps> = ({
       const payload = {
         invoiceNumber: invoiceNumberInput.trim() || undefined,
         partyId: selectedPartyId || 'NEW',
-        newPartyData: (selectedPartyId === 'NEW' || draftParty?.isNew) ? selectedParty : undefined,
+        newPartyData: (selectedPartyId === 'NEW' || draftParty?.isNew || selectedParty?.isNew) ? (draftParty || selectedParty) : undefined,
         invoiceDate,
         items: validLines,
         ewayBillNo: ewayBillNo.trim() || null,

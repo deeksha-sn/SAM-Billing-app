@@ -121,7 +121,8 @@ export const ChallanEditorModal: React.FC<ChallanEditorModalProps> = ({
 
     const payload = {
       challanNumber,
-      partyId,
+      partyId: partyId || 'NEW',
+      newPartyData: (partyId === 'NEW' || selectedCustomer?.id === 'NEW' || selectedCustomer?.isNew) ? selectedCustomer : undefined,
       challanDate,
       deliveryAddress,
       contactNumber,

@@ -169,7 +169,8 @@ export const PurchaseEditorModal: React.FC<PurchaseEditorModalProps> = ({
     setErrorMsg(null);
 
     const payload: any = {
-      partyId,
+      partyId: partyId || 'NEW',
+      newPartyData: (partyId === 'NEW' || selectedSupplier?.id === 'NEW' || selectedSupplier?.isNew) ? selectedSupplier : undefined,
       purchaseNumber,
       supplierInvoiceNo,
       purchaseDate,

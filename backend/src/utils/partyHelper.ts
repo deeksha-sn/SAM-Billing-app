@@ -32,16 +32,19 @@ export async function ensurePartyExists(
   const gstin = newPartyData?.gstin && String(newPartyData.gstin).trim() ? String(newPartyData.gstin).trim() : null;
   const pType = newPartyData?.type || defaultType;
 
-  // Check if a party with matching name, mobile, or GSTIN exists for this party type
-  const searchOr: any[] = [{ name: { equals: cleanName } }];
-  if (cleanMobile) searchOr.push({ mobile: cleanMobile });
-  if (gstin) searchOr.push({ gstin: gstin });
-
-  const foundParty = await dbClient.party.findFirst({
+  // Check if a party with matching name (case-insensitive), mobile, or GSTIN exists for this party type
+  const existingParties = await dbClient.party.findMany({
     where: {
       type: pType,
-      OR: searchOr,
+      active: true,
     },
+  });
+
+  const foundParty = existingParties.find((p: any) => {
+    if (p.name && p.name.trim().toLowerCase() === cleanName.toLowerCase()) return true;
+    if (cleanMobile && p.mobile && p.mobile.trim() === cleanMobile) return true;
+    if (gstin && p.gstin && p.gstin.trim().toLowerCase() === gstin.toLowerCase()) return true;
+    return false;
   });
 
   if (foundParty) {

@@ -325,7 +325,7 @@ export const QuotationEditorModal: React.FC<QuotationEditorModalProps> = ({
       return;
     }
 
-    if ((partyId === 'NEW' || selectedParty?.isNew) && (!selectedParty?.name || !selectedParty.name.trim())) {
+    if ((partyId === 'NEW' || selectedParty?.id === 'NEW' || selectedParty?.isNew) && (!selectedParty?.name || !selectedParty.name.trim())) {
       setErrorMessage('Customer Name is required');
       return;
     }
@@ -341,7 +341,7 @@ export const QuotationEditorModal: React.FC<QuotationEditorModalProps> = ({
       const payload = {
         quotationNumber: quotationNumber.trim() || undefined,
         partyId: partyId || 'NEW',
-        newPartyData: (partyId === 'NEW' || selectedParty?.isNew) ? selectedParty : undefined,
+        newPartyData: (partyId === 'NEW' || selectedParty?.id === 'NEW' || selectedParty?.isNew) ? selectedParty : undefined,
         quotationDate,
         validityDate,
         items,
