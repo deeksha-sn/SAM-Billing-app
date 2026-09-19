@@ -20,6 +20,23 @@ export const DeliveryChallans: React.FC = () => {
   const [deletingChallan, setDeletingChallan] = useState<any | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  const loadChallans = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const res = await apiRequest('/delivery-challans');
+      const list = Array.isArray(res) ? res : res.challans || [];
+      setChallans(list);
+      const sRes = await apiRequest('/settings/system');
+      setStockSetting(sRes.settings?.delivery_challan_affects_stock || 'YES');
+    } catch (err: any) {
+      console.error('Failed to load delivery challans:', err);
+      setErrorMsg(err.message || 'Failed to load delivery challans from server');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadChallans();
   }, []);
@@ -38,23 +55,6 @@ export const DeliveryChallans: React.FC = () => {
       />
     );
   }
-
-  const loadChallans = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    try {
-      const res = await apiRequest('/delivery-challans');
-      const list = Array.isArray(res) ? res : res.challans || [];
-      setChallans(list);
-      const sRes = await apiRequest('/settings/system');
-      setStockSetting(sRes.settings?.delivery_challan_affects_stock || 'YES');
-    } catch (err: any) {
-      console.error('Failed to load delivery challans:', err);
-      setErrorMsg(err.message || 'Failed to load delivery challans from server');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSaved = (saved: any) => {
     setEditorModalChallan(null);

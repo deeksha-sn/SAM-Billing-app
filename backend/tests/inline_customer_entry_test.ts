@@ -42,9 +42,10 @@ async function runInlineCustomerTest() {
     const firstItem = await prisma.item.findFirst();
     if (!firstItem) throw new Error('No items in database');
 
+    const invNum = `SAM-TEST-INLINE-${Date.now()}`;
     const invoice = await prisma.invoice.create({
       data: {
-        invoiceNumber: 'SAM-TEST-INLINE-001',
+        invoiceNumber: invNum,
         financialYear: '26-27',
         invoiceDate: new Date(),
         partyId: resolvedId1,

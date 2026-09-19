@@ -24,6 +24,30 @@ export const SalesInvoices: React.FC = () => {
   const [printingInvoice, setPrintingInvoice] = useState<any>(null);
   const [sharingInvoice, setSharingInvoice] = useState<any>(null);
 
+  const loadInvoices = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const res = await apiRequest('/sales/invoices');
+      const list = Array.isArray(res) ? res : res.invoices || [];
+      setInvoices(list);
+    } catch (err: any) {
+      console.error('Error loading invoices:', err);
+      setErrorMsg(err.message || 'Failed to load sales invoices from server');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCompany = async () => {
+    try {
+      const res = await apiRequest('/settings/company');
+      setCompany(res.company);
+    } catch (err) {
+      console.error('Error loading company profile:', err);
+    }
+  };
+
   useEffect(() => {
     loadInvoices();
     loadCompany();
@@ -49,30 +73,6 @@ export const SalesInvoices: React.FC = () => {
       />
     );
   }
-
-  const loadInvoices = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    try {
-      const res = await apiRequest('/sales/invoices');
-      const list = Array.isArray(res) ? res : res.invoices || [];
-      setInvoices(list);
-    } catch (err: any) {
-      console.error('Error loading invoices:', err);
-      setErrorMsg(err.message || 'Failed to load sales invoices from server');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadCompany = async () => {
-    try {
-      const res = await apiRequest('/settings/company');
-      setCompany(res.company);
-    } catch (err) {
-      console.error('Error loading company profile:', err);
-    }
-  };
 
   // Actions
   const handleOpenCreate = () => {

@@ -29,6 +29,30 @@ export const Quotations: React.FC = () => {
   const [deletingQuotation, setDeletingQuotation] = useState<any>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
+  const loadQuotations = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const res = await apiRequest('/quotations');
+      const list = Array.isArray(res) ? res : res.quotations || [];
+      setQuotations(list);
+    } catch (err: any) {
+      console.error('Error loading quotations:', err);
+      setErrorMsg(err.message || 'Failed to load quotations from server');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCompany = async () => {
+    try {
+      const res = await apiRequest('/settings/company');
+      setCompany(res.company);
+    } catch (err) {
+      console.error('Error loading company profile:', err);
+    }
+  };
+
   useEffect(() => {
     loadQuotations();
     loadCompany();
@@ -54,30 +78,6 @@ export const Quotations: React.FC = () => {
       />
     );
   }
-
-  const loadQuotations = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    try {
-      const res = await apiRequest('/quotations');
-      const list = Array.isArray(res) ? res : res.quotations || [];
-      setQuotations(list);
-    } catch (err: any) {
-      console.error('Error loading quotations:', err);
-      setErrorMsg(err.message || 'Failed to load quotations from server');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadCompany = async () => {
-    try {
-      const res = await apiRequest('/settings/company');
-      setCompany(res.company);
-    } catch (err) {
-      console.error('Error loading company profile:', err);
-    }
-  };
 
   // Actions
   const handleOpenCreate = () => {

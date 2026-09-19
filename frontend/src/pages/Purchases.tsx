@@ -21,6 +21,21 @@ export const Purchases: React.FC = () => {
   const [deletingPurchase, setDeletingPurchase] = useState<any | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  const loadPurchases = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const res = await apiRequest('/purchases');
+      const list = Array.isArray(res) ? res : res.purchases || [];
+      setPurchases(list);
+    } catch (err: any) {
+      console.error('Failed to load purchases:', err);
+      setErrorMsg(err.message || 'Failed to load purchases from server');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadPurchases();
   }, []);
@@ -39,21 +54,6 @@ export const Purchases: React.FC = () => {
       />
     );
   }
-
-  const loadPurchases = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    try {
-      const res = await apiRequest('/purchases');
-      const list = Array.isArray(res) ? res : res.purchases || [];
-      setPurchases(list);
-    } catch (err: any) {
-      console.error('Failed to load purchases:', err);
-      setErrorMsg(err.message || 'Failed to load purchases from server');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSaved = (saved: any) => {
     setEditorModalPurchase(null);
